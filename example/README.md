@@ -1,45 +1,77 @@
-# KickFlip — LinkTrail Flutter example
+# KickFlip — LinkTrail Flutter demo
 
-A small Flutter storefront that shows **deferred deep linking** end to end with the
-[`linktrail_flutter`](../) plugin. It's the same **KickFlip** demo shipped with the native
+A small Flutter storefront that shows how the **LinkTrail** SDK's deferred deep linking drives
+where a user lands after installing. It's the same **KickFlip** demo shipped with the native
 [Android](https://github.com/linktrail-io/android-sdk/tree/main/example) and
 [iOS](https://github.com/linktrail-io/ios-sdk/tree/main/example) SDKs, rebuilt in Flutter — it
-consumes the plugin exactly the way your app would (a `path:` dependency on the parent package).
+consumes the [`linktrail_flutter`](../) plugin exactly the way your app would (a `path:` dependency
+on the parent package).
 
-The whole integration collapses into one method — [`Store.route`](lib/store.dart) — wired once to
-`LinkTrail.onLink`. The link button in the app bar fires the same `LinkTrailDeepLink` objects into
-it, so you can see each scenario without a real click → install round-trip.
+## Run it
 
-## Run
+### 1. Add your API key
 
-Supply your `lt_live_…` key from the LinkTrail dashboard at build time (it is never hardcoded):
+Supply your workspace SDK key (`lt_live_…`, from the LinkTrail dashboard) at build time, so it
+never lands in source control:
 
 ```bash
+cd example
 flutter run --dart-define=LINKTRAIL_API_KEY=lt_live_…
 ```
 
-Without a key the backend rejects the request, and the app surfaces that on screen via
+Without a key the backend rejects the network call and the app surfaces that on screen via
 `LinkTrail.onError` (`LinkTrailInvalidApiKeyException`) — a quick way to confirm the Dart → native →
-network → Dart round-trip works on both platforms.
+network → Dart round-trip works. The four deep-link scenarios below fire local `LinkTrailDeepLink`
+objects, so the UI is still explorable without a key.
 
-To run standalone on a device (installs a build you can launch from the home screen):
+### 2. Build and run
+
+Run on a connected device or emulator (release build installs a launchable app):
 
 ```bash
 flutter run --release --dart-define=LINKTRAIL_API_KEY=lt_live_… -d <device-id>
 ```
 
-## The four scenarios
+## The app
 
-The link button (🔗) opens a sheet that fires the four deferred-deep-link scenarios from the brief:
+Two screens, nothing more:
 
-| Scenario | `deepLinkPath` | Result |
+- **Home** — a category bar on top (All · Basketball · Running · Lifestyle · Skate) and a grid of products.
+- **Product** — one product. If a voucher was delivered in the deep link, it shows the voucher badge, the discounted price, and how much you saved.
+
+## The four deferred deep-link scenarios
+
+Tap the **🔗 link button** (app bar) to open the sheet and fire any of these. Each is a real
+`LinkTrailDeepLink` — the same object your `onLink` handler receives from a real install.
+
+| Scenario | Deep link | Where you land |
 |---|---|---|
-| Just the store | `/` | Home |
-| Category selected | `/category/running` | Home, Running pre-selected |
-| A product | `/products/aj1` | Air Jordan 1 |
-| Product + voucher | `/products/aj1` + `customData {voucher: SUMMER25, discountPercent: 25}` | Air Jordan 1 with the voucher applied |
+| 1 · Just the store | `deepLinkPath: "/"` | Home |
+| 2 · Category selected | `deepLinkPath: "/category/running"` | Home with **Running** pre-selected |
+| 3 · A product | `deepLinkPath: "/products/aj1"` | The Air Jordan 1 product page |
+| 4 · Product + voucher | `deepLinkPath: "/products/aj1"`, `customData: {voucher: "SUMMER25", discountPercent: "25"}` | Product page with **SUMMER25 −25%** applied |
 
-## Test a real link from the terminal
+The sheet fabricates the deferred link locally so you don't need a real click → install round-trip.
+In production these arrive from the SDK — no code changes in the app.
+
+## How it maps to the SDK
+
+The entire integration is one method — [`Store.route`](lib/store.dart) — which reads `link.path`
+and `link.customData` and decides the screen. It's wired up once:
+
+```dart
+LinkTrail.onLink.listen((event) {
+    store.route(event.link.path, event.link.customData);   // deferred (first launch) AND re-engagement
+});
+```
+
+| SDK touchpoint | Where |
+|---|---|
+| `LinkTrail.configure(apiKey:)` + `onLink` / `onAttribution` / `onError` subscriptions | [`lib/main.dart`](lib/main.dart) |
+| `route()` — the single method the SDK integration reduces to | [`lib/store.dart`](lib/store.dart) |
+| The four demo `LinkTrailDeepLink`s | [`lib/scenarios.dart`](lib/scenarios.dart) |
+
+## Test from the terminal
 
 With the app installed, fire the registered custom scheme to route while it's running (warm) or
 launch it from killed (cold — the plugin buffers and replays the link after `configure`):
@@ -55,10 +87,3 @@ xcrun simctl openurl booted "kickflip://products/aj1?voucher=SUMMER25&discountPe
 
 For real attribution and re-engagement links (`https://kick.linktrail.io/…`), set up App Links /
 Universal Links per the [plugin README](../README.md#deep-link-setup).
-
-## What to look at
-
-- [`lib/main.dart`](lib/main.dart) — SDK wiring: `configure`, and the `onLink` / `onAttribution` /
-  `onError` stream subscriptions.
-- [`lib/store.dart`](lib/store.dart) — `route()`, the single method the SDK integration reduces to.
-- [`lib/scenarios.dart`](lib/scenarios.dart) — the four demo `LinkTrailDeepLink`s.

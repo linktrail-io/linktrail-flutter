@@ -2,19 +2,22 @@
 
 Mobile **attribution** and **deferred deep linking** for Flutter. A thin plugin over the native
 LinkTrail SDKs — package `linktrail_flutter`, entry point `LinkTrail`. Wraps the
-[Android SDK](https://github.com/linktrail-io/android-sdk) and
-[iOS SDK](https://github.com/linktrail-io/ios-sdk), exposing one Dart API across both platforms.
+[LinkTrail Android](https://github.com/linktrail-io/android-sdk) and
+[iOS](https://github.com/linktrail-io/ios-sdk) SDKs, exposing one Dart API across both platforms.
 
-- **Platforms:** Android (min SDK **26**) · iOS (**15+**)
+- **Package:** `linktrail_flutter` · **Android:** minSdk 26 · **iOS:** 15+
 - **Native SDKs wrapped:** `io.linktrail:sdk` (Maven Central) · `LinkTrailSDK` (CocoaPods)
 
 ## Install
 
-Add the dependency to your app's `pubspec.yaml`:
+Add the dependency to your app's `pubspec.yaml` (a pub.dev release is coming; until then, install
+straight from GitHub):
 
 ```yaml
 dependencies:
-  linktrail_flutter: ^0.0.1
+  linktrail_flutter:
+    git:
+      url: https://github.com/linktrail-io/linktrail-flutter.git
 ```
 
 Then `flutter pub get`. The native SDKs are pulled in automatically — no manual Gradle or CocoaPods
@@ -57,11 +60,10 @@ Future<void> main() async {
 
 Incoming links are **captured automatically** — you do **not** need to override `MainActivity`
 (Android) or `AppDelegate`/`SceneDelegate` (iOS). The plugin forwards App Links, Universal Links and
-custom-scheme opens to the SDK for you, on both cold start and while running.
+custom-scheme opens to the SDK for you, on both cold start and while running. Every callback is a
+broadcast `Stream`, so you can listen from multiple places (e.g. a `StreamBuilder`).
 
-Every callback is a broadcast `Stream`, so you can listen from multiple places (e.g. a `StreamBuilder`).
-
-### API surface
+## More
 
 ```dart
 // Configuration
@@ -143,18 +145,15 @@ iOS 26 (`FlutterSceneDelegate`) as well as the classic app-delegate lifecycle.
 
 [`example/`](example/) is **KickFlip**, a small storefront that demonstrates deferred deep linking
 end to end — the same demo shipped with the native Android and iOS SDKs, rebuilt in Flutter. A link
-button fires the four scenarios (home · category · product · product + voucher). See
-[example/README.md](example/README.md).
-
-Supply your key at build time so it never lands in source control:
+button fires the four scenarios (home · category · product · product + voucher):
 
 ```bash
-cd example
-flutter run --dart-define=LINKTRAIL_API_KEY=lt_live_…
+cd example && flutter run --dart-define=LINKTRAIL_API_KEY=lt_live_…
 ```
 
-## Versioning
+Supply your key at build time so it never lands in source control. See
+[example/README.md](example/README.md).
 
-Semantic versioning. The plugin version tracks its own changes; the wrapped native SDK versions are
-pinned in `android/build.gradle.kts` (`io.linktrail:sdk`) and `ios/linktrail_flutter.podspec`
-(`LinkTrailSDK`).
+## License
+
+See [LICENSE](LICENSE).

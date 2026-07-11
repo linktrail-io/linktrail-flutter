@@ -10,18 +10,31 @@ LinkTrail SDKs — package `linktrail_flutter`, entry point `LinkTrail`. Wraps t
 
 ## Install
 
-Add the dependency to your app's `pubspec.yaml` (a pub.dev release is coming; until then, install
-straight from GitHub):
+```bash
+flutter pub add linktrail_flutter
+```
+
+or add it to your app's `pubspec.yaml`:
+
+```yaml
+dependencies:
+  linktrail_flutter: ^0.0.1
+```
+
+Then `flutter pub get`. The native SDKs are pulled in automatically — no manual Gradle or CocoaPods
+edits needed. On iOS run `pod install` in `ios/` (or let `flutter run` do it).
+
+<details>
+<summary>Not published to pub.dev yet? Install straight from GitHub</summary>
 
 ```yaml
 dependencies:
   linktrail_flutter:
     git:
       url: https://github.com/linktrail-io/linktrail-flutter.git
+      ref: v0.0.1
 ```
-
-Then `flutter pub get`. The native SDKs are pulled in automatically — no manual Gradle or CocoaPods
-edits needed. On iOS run `pod install` in `ios/` (or let `flutter run` do it).
+</details>
 
 Platform minimums the SDK requires — set them if your app targets lower:
 

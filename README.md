@@ -156,4 +156,5 @@ Supply your key at build time so it never lands in source control. See
 
 ## License
 
-See [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Note the plugin is open source, but the LinkTrail service it talks to
+requires a workspace API key.

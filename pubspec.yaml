@@ -1,6 +1,6 @@
 name: linktrail_flutter
 description: "Flutter plugin wrapping the LinkTrail Android/iOS SDKs for mobile attribution and deferred deep linking."
-version: 0.0.1
+version: 0.0.2
 homepage: https://github.com/linktrail-io/linktrail-flutter
 repository: https://github.com/linktrail-io/linktrail-flutter
 issue_tracker: https://github.com/linktrail-io/linktrail-flutter/issues

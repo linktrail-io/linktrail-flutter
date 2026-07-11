@@ -1,3 +1,9 @@
+## 0.0.2
+
+- Relicensed under MIT.
+- Docs: install via the pub.dev package name (`flutter pub add linktrail_flutter`); the git
+  dependency is now just a pre-publish fallback.
+
 ## 0.0.1
 
 Initial release — a Flutter plugin wrapping the native LinkTrail Android and iOS SDKs for mobile

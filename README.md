@@ -5,7 +5,7 @@ LinkTrail SDKs — package `linktrail_flutter`, entry point `LinkTrail`. Wraps t
 [LinkTrail Android](https://github.com/linktrail-io/android-sdk) and
 [iOS](https://github.com/linktrail-io/ios-sdk) SDKs, exposing one Dart API across both platforms.
 
-- **Package:** `linktrail_flutter` · **Android:** minSdk 26 · **iOS:** 15+
+- **Package:** [`linktrail_flutter`](https://pub.dev/packages/linktrail_flutter) (pub.dev) · **Android:** minSdk 26 · **iOS:** 15+
 - **Native SDKs wrapped:** `io.linktrail:sdk` (Maven Central) · `LinkTrailSDK` (CocoaPods)
 
 ## Install
@@ -18,23 +18,11 @@ or add it to your app's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  linktrail_flutter: ^0.0.1
+  linktrail_flutter: ^0.0.2
 ```
 
 Then `flutter pub get`. The native SDKs are pulled in automatically — no manual Gradle or CocoaPods
 edits needed. On iOS run `pod install` in `ios/` (or let `flutter run` do it).
-
-<details>
-<summary>Not published to pub.dev yet? Install straight from GitHub</summary>
-
-```yaml
-dependencies:
-  linktrail_flutter:
-    git:
-      url: https://github.com/linktrail-io/linktrail-flutter.git
-      ref: v0.0.1
-```
-</details>
 
 Platform minimums the SDK requires — set them if your app targets lower:
 

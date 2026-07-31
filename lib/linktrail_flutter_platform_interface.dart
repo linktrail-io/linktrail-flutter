@@ -49,6 +49,14 @@ abstract class LinktrailFlutterPlatform extends PlatformInterface {
     throw UnimplementedError('trackInstall() has not been implemented.');
   }
 
+  Future<LinkTrailAttribution> trackInstallWithClickToken(String token, {required bool force}) {
+    throw UnimplementedError('trackInstallWithClickToken() has not been implemented.');
+  }
+
+  Future<void> setConsent(bool granted) {
+    throw UnimplementedError('setConsent() has not been implemented.');
+  }
+
   Future<LinkTrailEventResult> trackEvent({required String name, double? value, String? currency}) {
     throw UnimplementedError('trackEvent() has not been implemented.');
   }

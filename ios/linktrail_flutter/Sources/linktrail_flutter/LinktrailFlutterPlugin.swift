@@ -1,5 +1,6 @@
 import Flutter
 import LinkTrailSDK
+import SwiftUI
 import UIKit
 
 /// Flutter plugin wrapping the native `LinkTrailSDK` iOS SDK.
@@ -33,6 +34,11 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
     // regardless of which lifecycle the host app uses.
     registrar.addApplicationDelegate(instance)
     registrar.addSceneDelegate(instance)
+
+    // Native paste button (UIPasteControl) for deferred-attribution click tokens (iOS 16+).
+    registrar.register(
+      LinkTrailPasteButtonFactory(messenger: registrar.messenger()),
+      withId: "linktrail_flutter/paste_button")
   }
 
   /// (Re)registers the native callback hooks on the current `LinkTrail.shared` instance.
@@ -91,6 +97,28 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
           result(toFlutterError(error))
         }
       }
+
+    case "trackInstallWithClickToken":
+      guard let sdk = LinkTrail.shared else {
+        result(FlutterError.notConfigured)
+        return
+      }
+      guard let token = args?["token"] as? String else {
+        result(FlutterError(code: "invalidArgument", message: "trackInstallWithClickToken requires a token.", details: nil))
+        return
+      }
+      let force = args?["force"] as? Bool ?? false
+      Task {
+        do {
+          result(try await sdk.trackInstall(clickToken: token, force: force).toMap())
+        } catch {
+          result(toFlutterError(error))
+        }
+      }
+
+    case "setConsent":
+      LinkTrail.shared?.setConsent(args?["granted"] as? Bool ?? false)
+      result(nil)
 
     case "trackEvent":
       guard let sdk = LinkTrail.shared else {
@@ -157,7 +185,9 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
         maxDelay: ((retryMap?["maxDelayMillis"] as? NSNumber)?.doubleValue ?? 8_000) / 1000
       ),
       linkDomains: map["linkDomains"] as? [String] ?? [],
-      autoTrackInstall: map["autoTrackInstall"] as? Bool ?? true
+      autoTrackInstall: map["autoTrackInstall"] as? Bool ?? true,
+      clickTokenSource: (map["clickTokenSource"] as? String) == "automatic" ? .automatic : .pasteButton,
+      requireConsent: map["requireConsent"] as? Bool ?? true
     )
   }
 
@@ -365,4 +395,54 @@ private func toFlutterError(_ error: Error) -> FlutterError {
 private func toErrorMap(_ error: Error) -> [String: Any?] {
   let flutterError = toFlutterError(error)
   return ["code": flutterError.code, "message": flutterError.message, "details": flutterError.details]
+}
+
+// MARK: - Paste button platform view
+
+/// Factory for the `linktrail_flutter/paste_button` platform view.
+final class LinkTrailPasteButtonFactory: NSObject, FlutterPlatformViewFactory {
+  private let messenger: FlutterBinaryMessenger
+
+  init(messenger: FlutterBinaryMessenger) {
+    self.messenger = messenger
+    super.init()
+  }
+
+  func create(withFrame frame: CGRect, viewIdentifier viewId: Int64, arguments args: Any?) -> FlutterPlatformView {
+    LinkTrailPasteButtonPlatformView(frame: frame, viewId: viewId, messenger: messenger)
+  }
+
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+    FlutterStandardMessageCodec.sharedInstance()
+  }
+}
+
+/// Hosts the LinkTrailSDK SwiftUI `LinkTrailPasteButton` (a `UIPasteControl`) and forwards the
+/// pasted click token back to Dart over a per-view method channel. iOS 16+; renders an empty view
+/// on older iOS.
+final class LinkTrailPasteButtonPlatformView: NSObject, FlutterPlatformView {
+  private let container: UIView
+  private let channel: FlutterMethodChannel
+  private var host: UIViewController?
+
+  init(frame: CGRect, viewId: Int64, messenger: FlutterBinaryMessenger) {
+    container = UIView(frame: frame)
+    channel = FlutterMethodChannel(name: "linktrail_flutter/paste_button/\(viewId)", binaryMessenger: messenger)
+    super.init()
+
+    container.backgroundColor = .clear
+    if #available(iOS 16.0, *) {
+      let button = LinkTrailPasteButton { [weak channel] token in
+        channel?.invokeMethod("onToken", arguments: token)
+      }
+      let host = UIHostingController(rootView: button)
+      host.view.backgroundColor = .clear
+      host.view.frame = container.bounds
+      host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+      container.addSubview(host.view)
+      self.host = host
+    }
+  }
+
+  func view() -> UIView { container }
 }

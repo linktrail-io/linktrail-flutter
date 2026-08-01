@@ -1,6 +1,6 @@
 ## 0.1.0
 
-- Bumped the wrapped native SDKs: iOS `LinkTrailSDK ~> 0.0.10`, Android `io.linktrail:sdk:0.0.4`.
+- Bumped the wrapped native SDKs: iOS `LinkTrailSDK ~> 0.0.10`, Android `io.linktrail:sdk:0.0.5`.
 - **Consent gating (GDPR / ePrivacy):** new `LinkTrailOptions.requireConsent` (deny-by-default) and
   `LinkTrail.setConsent(bool)`. The SDK holds the install and drops events until consent is granted;
   deep links still route. No consent getter — replay it from your own storage each launch.

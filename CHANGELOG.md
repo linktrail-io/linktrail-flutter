@@ -1,4 +1,4 @@
-## 0.1.0
+## 0.0.3
 
 - Bumped the wrapped native SDKs: iOS `LinkTrailSDK ~> 0.0.10`, Android `io.linktrail:sdk:0.0.5`.
 - **Consent gating (GDPR / ePrivacy):** new `LinkTrailOptions.requireConsent` (deny-by-default) and

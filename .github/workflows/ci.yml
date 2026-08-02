@@ -3,8 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md", "LICENSE"]
   pull_request:
     branches: [main]
+    paths-ignore: ["**.md", "LICENSE"]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -42,6 +44,11 @@ jobs:
 
       - name: Run tests
         run: flutter test
+
+      # Validates pubspec/CHANGELOG/LICENSE/packaging without publishing — catches release-breaking
+      # metadata before an (irreversible) `flutter pub publish`.
+      - name: Publish dry-run
+        run: flutter pub publish --dry-run
 
       - name: Build example (Android APK, debug)
         working-directory: example

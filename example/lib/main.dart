@@ -17,7 +17,7 @@ import 'widgets/simulator_sheet.dart';
 ///
 /// Without it the backend rejects the request, surfaced below via [LinkTrail.onError]
 /// as `LinkTrailInvalidApiKeyException`.
-const _apiKey = String.fromEnvironment('LINKTRAIL_API_KEY', defaultValue: 'lt_live_REPLACE_WITH_YOUR_KEY');
+const _apiKey = String.fromEnvironment('LINKTRAIL_API_KEY', defaultValue: 'lt_live_ffd42e47b055b3d0cfe093ba8acc62aac2b88c08907d6a55');
 
 void main() {
   runApp(const KickFlipDemoApp());
@@ -98,18 +98,23 @@ class _KickFlipDemoAppState extends State<KickFlipDemoApp> {
   Future<void> _promptForConsent() async {
     final context = _navigatorKey.currentContext;
     if (context == null) return;
+    // iOS paste (onToken) = allow + deferred token: grant consent first (so the gated install can
+    // proceed), persist, then install with the token; the sheet then returns null (already handled).
+    // Android returns the selected Allow/Deny via "Continue". Skip returns null (stays undecided).
     final decision = await showConsentSheet(
       context,
       onToken: (token) async {
+        await LinkTrail.setConsent(true);
+        await _consentStore.save(Consent.granted);
         try {
           await LinkTrail.trackInstallWithClickToken(token);
-          setState(() => _status = 'Deferred token pasted · install tracked');
+          setState(() => _status = 'Consent granted · install tracked (token)');
         } on LinkTrailException catch (e) {
           setState(() => _status = 'Token install failed · $e');
         }
       },
     );
-    if (decision == null) return; // skipped → stays undecided
+    if (decision == null) return; // skipped, or iOS paste already handled in onToken
     await _consentStore.save(decision);
     await LinkTrail.setConsent(decision == Consent.granted);
     if (decision == Consent.granted) await LinkTrail.trackInstall();

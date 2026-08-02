@@ -36,15 +36,6 @@ android {
         versionName = flutter.versionName
     }
 
-    // The NDK's llvm-strip is an x86_64 binary; on Apple Silicon without Rosetta the AAB build
-    // fails to strip native debug symbols. Keep them instead (slightly larger .so's) so the
-    // bundle builds. Drop this once the NDK strip tool can run (Rosetta / arm64 NDK).
-    packaging {
-        jniLibs {
-            keepDebugSymbols.add("**/*.so")
-        }
-    }
-
     signingConfigs {
         create("release") {
             if (hasReleaseKeystore) {

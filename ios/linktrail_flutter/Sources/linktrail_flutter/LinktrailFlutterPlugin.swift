@@ -1,6 +1,5 @@
 import Flutter
 import LinkTrailSDK
-import SwiftUI
 import UIKit
 
 /// Flutter plugin wrapping the native `LinkTrailSDK` iOS SDK.
@@ -424,7 +423,8 @@ final class LinkTrailPasteButtonFactory: NSObject, FlutterPlatformViewFactory {
 final class LinkTrailPasteButtonPlatformView: NSObject, FlutterPlatformView {
   private let container: UIView
   private let channel: FlutterMethodChannel
-  private var receiver: LinkTrailPasteReceiver?
+  // Stored as the base type so this class doesn't inherit LinkTrailPasteReceiver's iOS 16 availability.
+  private var receiver: UIView?
 
   init(frame: CGRect, viewId: Int64, messenger: FlutterBinaryMessenger, args: Any?) {
     container = UIView(frame: frame)
@@ -444,6 +444,11 @@ final class LinkTrailPasteButtonPlatformView: NSObject, FlutterPlatformView {
 
       let receiver = LinkTrailPasteReceiver()
       receiver.onToken = { [weak channel] token in channel?.invokeMethod("onToken", arguments: token) }
+      // UIPasteControl only enables when its target declares — via a paste configuration — that it
+      // accepts the clipboard's content type. Without this the button stays disabled/greyed out.
+      receiver.pasteConfiguration = UIPasteConfiguration(acceptableTypeIdentifiers: [
+        "public.utf8-plain-text", "public.plain-text", "public.text", "public.url",
+      ])
 
       let control = UIPasteControl(configuration: config)
       control.target = receiver

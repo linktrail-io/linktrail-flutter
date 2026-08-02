@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:linktrail_flutter/linktrail_flutter.dart';
 
@@ -70,15 +73,29 @@ class _ConsentSheetState extends State<_ConsentSheet> {
             ],
           ),
           const SizedBox(height: 16),
-          // Full-width, theme-colored paste button. Tapping it (iOS) = allow + read deferred token.
-          // Renders nothing on Android.
-          LinkTrailPasteButton(
-            color: scheme.primary,
-            onToken: (token) {
-              widget.onToken?.call(token);
-              if (mounted) Navigator.pop(context, Consent.granted);
-            },
-          ),
+          // Full-width primary action below the row.
+          //  • iOS: the native paste button (tapping it = allow + read the deferred token).
+          //  • Android: a "Continue" button that commits the selected Allow/Deny choice (there is no
+          //    paste control on Android — the Play Install Referrer handles deferred attribution).
+          if (!kIsWeb && Platform.isIOS)
+            LinkTrailPasteButton(
+              color: scheme.primary,
+              onToken: (token) {
+                widget.onToken?.call(token);
+                if (mounted) Navigator.pop(context, null); // onToken commits; nothing more to do
+              },
+            )
+          else
+            SizedBox(
+              height: 52,
+              child: FilledButton(
+                onPressed: () => Navigator.pop(context, _selected),
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('Continue', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              ),
+            ),
           const SizedBox(height: 4),
           // Skip — last button, simply dismisses (stays undecided).
           TextButton(

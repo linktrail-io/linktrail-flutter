@@ -17,7 +17,7 @@ import 'widgets/simulator_sheet.dart';
 ///
 /// Without it the backend rejects the request, surfaced below via [LinkTrail.onError]
 /// as `LinkTrailInvalidApiKeyException`.
-const _apiKey = String.fromEnvironment('LINKTRAIL_API_KEY', defaultValue: 'lt_live_ffd42e47b055b3d0cfe093ba8acc62aac2b88c08907d6a55');
+const _apiKey = String.fromEnvironment('LINKTRAIL_API_KEY', defaultValue: 'lt_live_REPLACE_WITH_YOUR_KEY');
 
 void main() {
   runApp(const KickFlipDemoApp());

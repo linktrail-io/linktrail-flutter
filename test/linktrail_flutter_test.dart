@@ -35,6 +35,14 @@ class MockLinktrailFlutterPlatform with MockPlatformInterfaceMixin implements Li
   }
 
   @override
+  Future<LinkTrailAttribution> trackInstallWithClickToken(String token, {required bool force}) {
+    return Future.value(const LinkTrailAttribution(attributed: true));
+  }
+
+  @override
+  Future<void> setConsent(bool granted) => Future.value();
+
+  @override
   Future<LinkTrailAttribution?> getLastAttribution() => Future.value(null);
 
   @override

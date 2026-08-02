@@ -4,6 +4,19 @@ enum LinkTrailLogLevel { debug, info, warning, error, none }
 /// Coarse SKAdNetwork conversion value bucket (iOS-only).
 enum LinkTrailCoarseConversionValue { low, medium, high }
 
+/// How the iOS SDK reads the deferred-attribution click token from the clipboard.
+/// iOS-only — ignored on Android, which uses the Play Install Referrer.
+enum LinkTrailClickTokenSource {
+  /// The token is read only when the user taps a [LinkTrailPasteButton]
+  /// (`UIPasteControl`) — no system "Allow Paste" alert. Pair with
+  /// `autoTrackInstall: false` so the install waits for the tap.
+  pasteButton,
+
+  /// The SDK reads the clipboard itself at install — no UI, but iOS shows the
+  /// system "Allow Paste" alert on first launch.
+  automatic,
+}
+
 /// Where a delivered [LinkTrailDeepLink] came from.
 enum LinkTrailLinkSource {
   /// The link was tapped before the app was installed (first launch).
@@ -44,6 +57,8 @@ class LinkTrailOptions {
     this.retryPolicy = const LinkTrailRetryPolicy(),
     this.linkDomains = const [],
     this.autoTrackInstall = true,
+    this.requireConsent = true,
+    this.clickTokenSource = LinkTrailClickTokenSource.pasteButton,
   });
 
   final bool logEnabled;
@@ -52,12 +67,26 @@ class LinkTrailOptions {
   final LinkTrailRetryPolicy retryPolicy;
 
   /// Universal Link / App Link hosts that belong to this app (e.g.
-  /// `kick.linktrail.io`). Used to decide whether an incoming URL should be
-  /// treated as a LinkTrail link.
+  /// `kick.linktrail.io`). When non-empty, **re-engagement** opens (app already
+  /// installed) only route for these hosts — a link on an unlisted host opens
+  /// the app but never navigates. Deferred (install-time) links route
+  /// regardless. Leave empty to handle every parseable link.
   final List<String> linkDomains;
 
   /// Whether [LinkTrail.configure] fires an install/open event automatically.
+  /// Set `false` to defer the install — required when using a
+  /// [LinkTrailPasteButton] so the install waits for the token tap.
   final bool autoTrackInstall;
+
+  /// Deny-by-default consent gating (GDPR / ePrivacy). When `true` (the
+  /// default), the SDK holds the install and drops events until
+  /// [LinkTrail.setConsent] `true` is called. Deep links still route without
+  /// consent — only attribution/tracking is gated.
+  final bool requireConsent;
+
+  /// iOS-only: how the deferred-attribution click token is read from the
+  /// clipboard. Ignored on Android (Play Install Referrer).
+  final LinkTrailClickTokenSource clickTokenSource;
 
   Map<String, Object?> toMap() => {
     'logEnabled': logEnabled,
@@ -66,6 +95,8 @@ class LinkTrailOptions {
     'retryPolicy': retryPolicy.toMap(),
     'linkDomains': linkDomains,
     'autoTrackInstall': autoTrackInstall,
+    'requireConsent': requireConsent,
+    'clickTokenSource': clickTokenSource.name,
   };
 }
 

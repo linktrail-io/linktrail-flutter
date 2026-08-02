@@ -101,6 +101,68 @@ try {
 }
 ```
 
+## Consent gating (GDPR / ePrivacy)
+
+`LinkTrailOptions.requireConsent` defaults to **`true`** — **deny-by-default**. Until you call
+`LinkTrail.setConsent(true)`, the SDK **holds the install and drops events**. Deep links **still
+route** without consent (`onLink` fires and the user reaches the destination); only the
+*attribution/tracking* is gated. `setConsent(false)` stops sending and clears the queue.
+
+There is **no consent getter** — the app is the source of truth. Persist the choice yourself and
+replay it on **every launch** right after `configure`, so a previously-granted user resumes
+automatically:
+
+```dart
+await LinkTrail.configure(apiKey: 'lt_live_…', options: const LinkTrailOptions(requireConsent: true));
+
+// Replay the persisted decision (e.g. from SharedPreferences). Do nothing while undecided.
+final consent = await loadConsent();          // 'granted' | 'denied' | 'undecided'
+if (consent == 'granted') await LinkTrail.setConsent(true);
+if (consent == 'denied') await LinkTrail.setConsent(false);
+```
+
+Set `requireConsent: false` to opt out of gating and track automatically (the pre-consent behavior).
+
+## `linkDomains` — re-engagement host gating
+
+When `linkDomains` is **non-empty**, the SDK routes **re-engagement** opens (app already installed)
+*only* for those hosts — a link on an unlisted host **opens the app but never navigates**.
+**Deferred** (install-time) links skip this check and route regardless. Net effect: a missing host
+looks fine on a fresh install yet silently fails once installed. Leave `linkDomains` empty to handle
+every parseable link.
+
+## Deferred attribution & the paste button (iOS)
+
+On iOS, deferred attribution recovers a **click token** the tapped link leaves on the clipboard.
+`LinkTrailOptions.clickTokenSource` chooses how it's read:
+
+- **`pasteButton`** (default) — the token is read only when the user taps a `LinkTrailPasteButton`
+  (Apple's `UIPasteControl`), with **no system "Allow Paste" alert**. Render the button **and** set
+  `autoTrackInstall: false` so the install waits for the tap.
+- **`automatic`** — the SDK reads the clipboard itself at install (no UI, but iOS shows the "Allow
+  Paste" alert on first launch).
+
+```dart
+LinkTrailPasteButton(
+  width: 240,
+  onToken: (token) async {
+    await LinkTrail.trackInstallWithClickToken(token);
+  },
+)
+```
+
+The widget renders the native control on iOS 16+ and **nothing on Android** (Play Install Referrer
+handles deferred attribution there, so `clickTokenSource` and the paste button are ignored). Apple
+restricts customization — no custom label text, font or border.
+
+## Implementation notes
+
+- **Subscribe to `onLink` before any `await` after `configure`.** A cold-start deep link (deferred
+  first-launch, or a Universal Link that launched the app) is delivered right after `configure`; if
+  you await something first (e.g. reading consent from storage), the delivery lands with no listener
+  and is lost. Wire `onLink` first, *then* do async setup.
+- Consent has no getter — replay it from your own storage on every launch (see above).
+
 ## Deep-link setup
 
 The plugin captures links automatically, but the OS still needs to route the link to your app.

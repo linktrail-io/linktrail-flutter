@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:linktrail_flutter/linktrail_flutter.dart';
 
+import 'consent.dart';
 import 'store.dart';
 import 'screens/home_screen.dart';
 import 'screens/product_screen.dart';
+import 'widgets/consent_sheet.dart';
 import 'widgets/simulator_sheet.dart';
 
 /// Your workspace SDK key (`lt_live_…`) from the LinkTrail dashboard, supplied at
@@ -30,7 +32,10 @@ class KickFlipDemoApp extends StatefulWidget {
 
 class _KickFlipDemoAppState extends State<KickFlipDemoApp> {
   final Store _store = Store();
+  final ConsentStore _consentStore = ConsentStore();
   String? _status;
+
+  final _navigatorKey = GlobalKey<NavigatorState>();
 
   StreamSubscription<LinkTrailLinkEvent>? _onLinkSub;
   StreamSubscription<LinkTrailException>? _onErrorSub;
@@ -44,8 +49,9 @@ class _KickFlipDemoAppState extends State<KickFlipDemoApp> {
   }
 
   Future<void> _configureSdk() async {
-    // The one piece of real wiring: route deferred (first launch) + re-engagement
-    // links delivered by the SDK straight into the store.
+    // §5 lesson: wire onLink BEFORE any async work. A cold-start deep link is delivered right
+    // after configure — if we awaited consent-loading first, the delivery would land with no
+    // listener and be lost.
     _onLinkSub = LinkTrail.onLink.listen((event) {
       _store.route(event.link, event.source);
     });
@@ -59,11 +65,60 @@ class _KickFlipDemoAppState extends State<KickFlipDemoApp> {
     try {
       await LinkTrail.configure(
         apiKey: _apiKey,
-        options: const LinkTrailOptions(logEnabled: true, linkDomains: ['kick.linktrail.io']),
+        // Deny-by-default consent gating (requireConsent), plus the iOS paste-button deferred-token
+        // flow (clickTokenSource + autoTrackInstall:false so the install waits for the tap).
+        options: const LinkTrailOptions(
+          logEnabled: true,
+          linkDomains: ['kick.linktrail.io'],
+          requireConsent: true,
+          autoTrackInstall: false,
+          clickTokenSource: LinkTrailClickTokenSource.pasteButton,
+        ),
       );
     } on LinkTrailException catch (e) {
       setState(() => _status = 'Configure failed · $e');
+      return;
     }
+
+    await _applyConsent();
+  }
+
+  /// Replays the persisted consent decision (the SDK has no getter), then prompts on first launch.
+  Future<void> _applyConsent() async {
+    final consent = await _consentStore.load();
+    if (consent != Consent.undecided) {
+      await LinkTrail.setConsent(consent == Consent.granted);
+      if (consent == Consent.granted) await LinkTrail.trackInstall();
+      return;
+    }
+    // Undecided → prompt after the first frame so a Navigator/context is available.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _promptForConsent());
+  }
+
+  Future<void> _promptForConsent() async {
+    final context = _navigatorKey.currentContext;
+    if (context == null) return;
+    // iOS paste (onToken) = allow + deferred token: grant consent first (so the gated install can
+    // proceed), persist, then install with the token; the sheet then returns null (already handled).
+    // Android returns the selected Allow/Deny via "Continue". Skip returns null (stays undecided).
+    final decision = await showConsentSheet(
+      context,
+      onToken: (token) async {
+        await LinkTrail.setConsent(true);
+        await _consentStore.save(Consent.granted);
+        try {
+          await LinkTrail.trackInstallWithClickToken(token);
+          setState(() => _status = 'Consent granted · install tracked (token)');
+        } on LinkTrailException catch (e) {
+          setState(() => _status = 'Token install failed · $e');
+        }
+      },
+    );
+    if (decision == null) return; // skipped, or iOS paste already handled in onToken
+    await _consentStore.save(decision);
+    await LinkTrail.setConsent(decision == Consent.granted);
+    if (decision == Consent.granted) await LinkTrail.trackInstall();
+    setState(() => _status = 'Consent · ${decision.name}');
   }
 
   void _onStoreChanged() => setState(() {});
@@ -87,6 +142,7 @@ class _KickFlipDemoAppState extends State<KickFlipDemoApp> {
     final screen = _store.screen;
     return MaterialApp(
       title: 'KickFlip',
+      navigatorKey: _navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF6C4DF6)),

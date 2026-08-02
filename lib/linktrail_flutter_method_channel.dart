@@ -101,6 +101,24 @@ class MethodChannelLinktrailFlutter extends LinktrailFlutterPlatform {
   }
 
   @override
+  Future<LinkTrailAttribution> trackInstallWithClickToken(String token, {required bool force}) async {
+    try {
+      final map = await methodChannel.invokeMapMethod<Object?, Object?>('trackInstallWithClickToken', {
+        'token': token,
+        'force': force,
+      });
+      return LinkTrailAttribution.fromMap(map!);
+    } on PlatformException catch (e) {
+      throw LinkTrailException.fromPlatformException(e);
+    }
+  }
+
+  @override
+  Future<void> setConsent(bool granted) {
+    return methodChannel.invokeMethod<void>('setConsent', {'granted': granted});
+  }
+
+  @override
   Future<LinkTrailAttribution?> getLastAttribution() async {
     final map = await methodChannel.invokeMapMethod<Object?, Object?>('getLastAttribution');
     return map == null ? null : LinkTrailAttribution.fromMap(map);

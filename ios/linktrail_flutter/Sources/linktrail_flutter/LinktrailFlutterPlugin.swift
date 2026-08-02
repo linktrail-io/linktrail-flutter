@@ -33,6 +33,11 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
     // regardless of which lifecycle the host app uses.
     registrar.addApplicationDelegate(instance)
     registrar.addSceneDelegate(instance)
+
+    // Native paste button (UIPasteControl) for deferred-attribution click tokens (iOS 16+).
+    registrar.register(
+      LinkTrailPasteButtonFactory(messenger: registrar.messenger()),
+      withId: "linktrail_flutter/paste_button")
   }
 
   /// (Re)registers the native callback hooks on the current `LinkTrail.shared` instance.
@@ -91,6 +96,28 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
           result(toFlutterError(error))
         }
       }
+
+    case "trackInstallWithClickToken":
+      guard let sdk = LinkTrail.shared else {
+        result(FlutterError.notConfigured)
+        return
+      }
+      guard let token = args?["token"] as? String else {
+        result(FlutterError(code: "invalidArgument", message: "trackInstallWithClickToken requires a token.", details: nil))
+        return
+      }
+      let force = args?["force"] as? Bool ?? false
+      Task {
+        do {
+          result(try await sdk.trackInstall(clickToken: token, force: force).toMap())
+        } catch {
+          result(toFlutterError(error))
+        }
+      }
+
+    case "setConsent":
+      LinkTrail.shared?.setConsent(args?["granted"] as? Bool ?? false)
+      result(nil)
 
     case "trackEvent":
       guard let sdk = LinkTrail.shared else {
@@ -157,7 +184,9 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
         maxDelay: ((retryMap?["maxDelayMillis"] as? NSNumber)?.doubleValue ?? 8_000) / 1000
       ),
       linkDomains: map["linkDomains"] as? [String] ?? [],
-      autoTrackInstall: map["autoTrackInstall"] as? Bool ?? true
+      autoTrackInstall: map["autoTrackInstall"] as? Bool ?? true,
+      clickTokenSource: (map["clickTokenSource"] as? String) == "automatic" ? .automatic : .pasteButton,
+      requireConsent: map["requireConsent"] as? Bool ?? true
     )
   }
 
@@ -365,4 +394,98 @@ private func toFlutterError(_ error: Error) -> FlutterError {
 private func toErrorMap(_ error: Error) -> [String: Any?] {
   let flutterError = toFlutterError(error)
   return ["code": flutterError.code, "message": flutterError.message, "details": flutterError.details]
+}
+
+// MARK: - Paste button platform view
+
+/// Factory for the `linktrail_flutter/paste_button` platform view.
+final class LinkTrailPasteButtonFactory: NSObject, FlutterPlatformViewFactory {
+  private let messenger: FlutterBinaryMessenger
+
+  init(messenger: FlutterBinaryMessenger) {
+    self.messenger = messenger
+    super.init()
+  }
+
+  func create(withFrame frame: CGRect, viewIdentifier viewId: Int64, arguments args: Any?) -> FlutterPlatformView {
+    LinkTrailPasteButtonPlatformView(frame: frame, viewId: viewId, messenger: messenger, args: args)
+  }
+
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+    FlutterStandardMessageCodec.sharedInstance()
+  }
+}
+
+/// Hosts Apple's native `UIPasteControl` (iOS 16+) themed to a caller-supplied color, and forwards
+/// the pasted click token back to Dart over a per-view method channel. Renders an empty view on
+/// older iOS. Using `UIPasteControl` (rather than reading the clipboard directly) is what avoids the
+/// system "Allow Paste" alert.
+final class LinkTrailPasteButtonPlatformView: NSObject, FlutterPlatformView {
+  private let container: UIView
+  private let channel: FlutterMethodChannel
+  // Stored as the base type so this class doesn't inherit LinkTrailPasteReceiver's iOS 16 availability.
+  private var receiver: UIView?
+
+  init(frame: CGRect, viewId: Int64, messenger: FlutterBinaryMessenger, args: Any?) {
+    container = UIView(frame: frame)
+    channel = FlutterMethodChannel(name: "linktrail_flutter/paste_button/\(viewId)", binaryMessenger: messenger)
+    super.init()
+
+    container.backgroundColor = .clear
+    let argMap = args as? [String: Any]
+    let fillColor = (argMap?["color"] as? NSNumber).map { UIColor(argb: $0.uint32Value) }
+
+    if #available(iOS 16.0, *) {
+      var config = UIPasteControl.Configuration()
+      config.displayMode = .labelOnly
+      config.cornerStyle = .capsule
+      config.baseForegroundColor = .white
+      if let fillColor { config.baseBackgroundColor = fillColor }
+
+      let receiver = LinkTrailPasteReceiver()
+      receiver.onToken = { [weak channel] token in channel?.invokeMethod("onToken", arguments: token) }
+      // UIPasteControl only enables when its target declares — via a paste configuration — that it
+      // accepts the clipboard's content type. Without this the button stays disabled/greyed out.
+      receiver.pasteConfiguration = UIPasteConfiguration(acceptableTypeIdentifiers: [
+        "public.utf8-plain-text", "public.plain-text", "public.text", "public.url",
+      ])
+
+      let control = UIPasteControl(configuration: config)
+      control.target = receiver
+      control.frame = container.bounds
+      control.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+
+      container.addSubview(receiver)
+      container.addSubview(control)
+      self.receiver = receiver
+    }
+  }
+
+  func view() -> UIView { container }
+}
+
+/// The paste target for the `UIPasteControl`. When the user taps the control, the system loads the
+/// clipboard items and calls `paste(itemProviders:)` here — with no "Allow Paste" alert.
+@available(iOS 16.0, *)
+final class LinkTrailPasteReceiver: UIView {
+  var onToken: ((String) -> Void)?
+
+  override func paste(itemProviders: [NSItemProvider]) {
+    guard let provider = itemProviders.first(where: { $0.canLoadObject(ofClass: NSString.self) }) else { return }
+    provider.loadObject(ofClass: NSString.self) { [weak self] object, _ in
+      guard let token = object as? String else { return }
+      DispatchQueue.main.async { self?.onToken?(token) }
+    }
+  }
+}
+
+private extension UIColor {
+  /// Builds a color from a 0xAARRGGBB integer (Flutter's `Color.value`).
+  convenience init(argb: UInt32) {
+    self.init(
+      red: CGFloat((argb >> 16) & 0xFF) / 255,
+      green: CGFloat((argb >> 8) & 0xFF) / 255,
+      blue: CGFloat(argb & 0xFF) / 255,
+      alpha: CGFloat((argb >> 24) & 0xFF) / 255)
+  }
 }

@@ -42,6 +42,27 @@ abstract final class LinkTrail {
     return LinktrailFlutterPlatform.instance.trackInstall(force: force);
   }
 
+  /// Tracks the install using a deferred-attribution click [token] read from
+  /// the clipboard (iOS). Use with `autoTrackInstall: false` and a
+  /// [LinkTrailPasteButton], or when reading the clipboard yourself. On Android
+  /// the token is ignored and this behaves like [trackInstall] (Play Install
+  /// Referrer handles deferred attribution there).
+  static Future<LinkTrailAttribution> trackInstallWithClickToken(String token, {bool force = false}) {
+    return LinktrailFlutterPlatform.instance.trackInstallWithClickToken(token, force: force);
+  }
+
+  /// Sets the user's tracking consent. With `requireConsent: true` (the
+  /// default), the SDK holds the install and drops events until this is called
+  /// with `true`; `setConsent(false)` stops sending and clears the queue.
+  ///
+  /// There is no consent getter — the app is the source of truth. Persist the
+  /// choice yourself and replay it on every launch right after [configure] so a
+  /// previously-granted user resumes tracking automatically. Deep links route
+  /// regardless of consent.
+  static Future<void> setConsent(bool granted) {
+    return LinktrailFlutterPlatform.instance.setConsent(granted);
+  }
+
   /// Tracks a custom event, optionally with a monetary [value] in [currency]
   /// (ISO 4217, e.g. `"USD"`).
   static Future<LinkTrailEventResult> trackEvent({required String name, double? value, String? currency}) {

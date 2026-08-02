@@ -174,6 +174,26 @@ class LinktrailFlutterPlugin :
                 }
             }
 
+            // Android has no clipboard click token (it uses the Play Install Referrer), so the
+            // token is ignored and this behaves like a normal install.
+            "trackInstallWithClickToken" -> {
+                val force = call.argument<Boolean>("force") ?: false
+                val sdk = LinkTrail.shared ?: return result.errorNotConfigured()
+                scope.launch {
+                    try {
+                        result.success(sdk.trackInstallAsync(force).toMap())
+                    } catch (e: Throwable) {
+                        result.error(e)
+                    }
+                }
+            }
+
+            "setConsent" -> {
+                val granted = call.argument<Boolean>("granted") ?: false
+                LinkTrail.shared?.setConsent(granted)
+                result.success(null)
+            }
+
             "getLastAttribution" -> result.success(LinkTrail.shared?.lastAttribution?.toMap())
             "getLastDeepLink" -> result.success(LinkTrail.shared?.lastDeepLink?.toMap())
 
@@ -218,6 +238,8 @@ class LinktrailFlutterPlugin :
                 ),
             linkDomains = linkDomains,
             autoTrackInstall = map["autoTrackInstall"] as? Boolean ?: true,
+            // clickTokenSource is iOS-only (Play Install Referrer on Android) — ignored here.
+            requireConsent = map["requireConsent"] as? Boolean ?: true,
         )
     }
 

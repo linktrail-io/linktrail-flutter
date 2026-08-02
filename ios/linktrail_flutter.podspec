@@ -15,7 +15,7 @@ A new Flutter plugin project.
   s.source           = { :path => '.' }
   s.source_files = 'linktrail_flutter/Sources/linktrail_flutter/**/*'
   s.dependency 'Flutter'
-  s.dependency 'LinkTrailSDK', '~> 0.0.8'
+  s.dependency 'LinkTrailSDK', '~> 0.0.10'
   s.platform = :ios, '15.0'
 
   # Flutter.framework does not contain a i386 slice.

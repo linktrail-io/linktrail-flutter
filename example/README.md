@@ -39,6 +39,16 @@ Two screens, nothing more:
 - **Home** — a category bar on top (All · Basketball · Running · Lifestyle · Skate) and a grid of products.
 - **Product** — one product. If a voucher was delivered in the deep link, it shows the voucher badge, the discounted price, and how much you saved.
 
+## Consent flow
+
+Configured with `requireConsent: true` (deny-by-default), so on **first launch** a consent sheet
+appears: **Allow** / **Deny** / **Skip**, plus a paste button (iOS deferred token; renders nothing
+on Android). The choice is persisted with `shared_preferences` and **replayed via
+`LinkTrail.setConsent` on every launch** after `configure` — the SDK has no consent getter, so the
+app is the source of truth. See [`lib/consent.dart`](lib/consent.dart) and
+[`lib/widgets/consent_sheet.dart`](lib/widgets/consent_sheet.dart). `onLink` is wired **before** the
+async consent load so a cold-start deep link is never dropped.
+
 ## The four deferred deep-link scenarios
 
 Tap the **🔗 link button** (app bar) to open the sheet and fire any of these. Each is a real

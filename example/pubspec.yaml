@@ -49,6 +49,13 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
 
+  # Build the example through CocoaPods — the integration this plugin validates and ships with.
+  # Flutter's experimental SPM integration fails on CI with a package-identity clash: the repo
+  # checks out as "linktrail-flutter" (dash) while the plugin's SPM package directory is
+  # "linktrail_flutter" (underscore), and SwiftPM refuses the override.
+  config:
+    enable-swift-package-manager: false
+
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

@@ -4,8 +4,11 @@ import 'package:linktrail_flutter/linktrail_flutter.dart';
 import '../consent.dart';
 
 /// First-launch consent prompt. Returns [Consent.granted] / [Consent.denied],
-/// or `null` if the user skipped (stays undecided). Mirrors the RN example:
-/// Allow / Deny as a selection, a paste button (iOS deferred token), and Skip.
+/// or `null` if the user skipped (stays undecided).
+///
+/// Layout: an **Allow / Deny** selectable row (purely a selection — takes no
+/// action), then a full-width **paste** button (tapping it means *allow* +
+/// reads the iOS deferred token), then **Skip** last.
 Future<Consent?> showConsentSheet(BuildContext context, {void Function(String token)? onToken}) {
   return showModalBottomSheet<Consent>(
     context: context,
@@ -15,10 +18,18 @@ Future<Consent?> showConsentSheet(BuildContext context, {void Function(String to
   );
 }
 
-class _ConsentSheet extends StatelessWidget {
+class _ConsentSheet extends StatefulWidget {
   const _ConsentSheet({this.onToken});
 
   final void Function(String token)? onToken;
+
+  @override
+  State<_ConsentSheet> createState() => _ConsentSheetState();
+}
+
+class _ConsentSheetState extends State<_ConsentSheet> {
+  // Selection only — highlights a choice but performs no SDK action (per the demo's design).
+  Consent _selected = Consent.granted;
 
   @override
   Widget build(BuildContext context) {
@@ -42,33 +53,78 @@ class _ConsentSheet extends StatelessWidget {
             style: TextStyle(color: Colors.grey.shade600, height: 1.4),
           ),
           const SizedBox(height: 24),
-          // iOS-only: the paste control reads the deferred click token with no "Allow Paste" alert.
-          // Renders nothing on Android (Play Install Referrer handles deferred attribution there).
-          Center(child: LinkTrailPasteButton(onToken: onToken, width: 240)),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, Consent.granted),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
-            child: const Text('Allow tracking', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          // Allow / Deny — a selectable segmented row. Selection only; no action taken here.
+          Row(
+            children: [
+              Expanded(child: _SelectableChip(
+                label: 'Allow tracking',
+                selected: _selected == Consent.granted,
+                onTap: () => setState(() => _selected = Consent.granted),
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: _SelectableChip(
+                label: 'Deny',
+                selected: _selected == Consent.denied,
+                onTap: () => setState(() => _selected = Consent.denied),
+              )),
+            ],
           ),
-          const SizedBox(height: 8),
-          OutlinedButton(
-            onPressed: () => Navigator.pop(context, Consent.denied),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
-            child: const Text('Deny'),
+          const SizedBox(height: 16),
+          // Full-width, theme-colored paste button. Tapping it (iOS) = allow + read deferred token.
+          // Renders nothing on Android.
+          LinkTrailPasteButton(
+            color: scheme.primary,
+            onToken: (token) {
+              widget.onToken?.call(token);
+              if (mounted) Navigator.pop(context, Consent.granted);
+            },
           ),
           const SizedBox(height: 4),
+          // Skip — last button, simply dismisses (stays undecided).
           TextButton(
             onPressed: () => Navigator.pop(context, null),
-            child: const Text('Skip for now'),
+            child: const Text('Skip'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SelectableChip extends StatelessWidget {
+  const _SelectableChip({required this.label, required this.selected, required this.onTap});
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: selected ? scheme.primary.withValues(alpha: 0.12) : Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          height: 52,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? scheme.primary : scheme.outlineVariant,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: selected ? scheme.primary : scheme.onSurface,
+            ),
+          ),
+        ),
       ),
     );
   }

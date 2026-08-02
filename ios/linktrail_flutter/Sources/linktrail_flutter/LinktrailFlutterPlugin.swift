@@ -409,7 +409,7 @@ final class LinkTrailPasteButtonFactory: NSObject, FlutterPlatformViewFactory {
   }
 
   func create(withFrame frame: CGRect, viewIdentifier viewId: Int64, arguments args: Any?) -> FlutterPlatformView {
-    LinkTrailPasteButtonPlatformView(frame: frame, viewId: viewId, messenger: messenger)
+    LinkTrailPasteButtonPlatformView(frame: frame, viewId: viewId, messenger: messenger, args: args)
   }
 
   func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
@@ -417,32 +417,70 @@ final class LinkTrailPasteButtonFactory: NSObject, FlutterPlatformViewFactory {
   }
 }
 
-/// Hosts the LinkTrailSDK SwiftUI `LinkTrailPasteButton` (a `UIPasteControl`) and forwards the
-/// pasted click token back to Dart over a per-view method channel. iOS 16+; renders an empty view
-/// on older iOS.
+/// Hosts Apple's native `UIPasteControl` (iOS 16+) themed to a caller-supplied color, and forwards
+/// the pasted click token back to Dart over a per-view method channel. Renders an empty view on
+/// older iOS. Using `UIPasteControl` (rather than reading the clipboard directly) is what avoids the
+/// system "Allow Paste" alert.
 final class LinkTrailPasteButtonPlatformView: NSObject, FlutterPlatformView {
   private let container: UIView
   private let channel: FlutterMethodChannel
-  private var host: UIViewController?
+  private var receiver: LinkTrailPasteReceiver?
 
-  init(frame: CGRect, viewId: Int64, messenger: FlutterBinaryMessenger) {
+  init(frame: CGRect, viewId: Int64, messenger: FlutterBinaryMessenger, args: Any?) {
     container = UIView(frame: frame)
     channel = FlutterMethodChannel(name: "linktrail_flutter/paste_button/\(viewId)", binaryMessenger: messenger)
     super.init()
 
     container.backgroundColor = .clear
+    let argMap = args as? [String: Any]
+    let fillColor = (argMap?["color"] as? NSNumber).map { UIColor(argb: $0.uint32Value) }
+
     if #available(iOS 16.0, *) {
-      let button = LinkTrailPasteButton { [weak channel] token in
-        channel?.invokeMethod("onToken", arguments: token)
-      }
-      let host = UIHostingController(rootView: button)
-      host.view.backgroundColor = .clear
-      host.view.frame = container.bounds
-      host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-      container.addSubview(host.view)
-      self.host = host
+      var config = UIPasteControl.Configuration()
+      config.displayMode = .labelOnly
+      config.cornerStyle = .capsule
+      config.baseForegroundColor = .white
+      if let fillColor { config.baseBackgroundColor = fillColor }
+
+      let receiver = LinkTrailPasteReceiver()
+      receiver.onToken = { [weak channel] token in channel?.invokeMethod("onToken", arguments: token) }
+
+      let control = UIPasteControl(configuration: config)
+      control.target = receiver
+      control.frame = container.bounds
+      control.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+
+      container.addSubview(receiver)
+      container.addSubview(control)
+      self.receiver = receiver
     }
   }
 
   func view() -> UIView { container }
+}
+
+/// The paste target for the `UIPasteControl`. When the user taps the control, the system loads the
+/// clipboard items and calls `paste(itemProviders:)` here — with no "Allow Paste" alert.
+@available(iOS 16.0, *)
+final class LinkTrailPasteReceiver: UIView {
+  var onToken: ((String) -> Void)?
+
+  override func paste(itemProviders: [NSItemProvider]) {
+    guard let provider = itemProviders.first(where: { $0.canLoadObject(ofClass: NSString.self) }) else { return }
+    provider.loadObject(ofClass: NSString.self) { [weak self] object, _ in
+      guard let token = object as? String else { return }
+      DispatchQueue.main.async { self?.onToken?(token) }
+    }
+  }
+}
+
+private extension UIColor {
+  /// Builds a color from a 0xAARRGGBB integer (Flutter's `Color.value`).
+  convenience init(argb: UInt32) {
+    self.init(
+      red: CGFloat((argb >> 16) & 0xFF) / 255,
+      green: CGFloat((argb >> 8) & 0xFF) / 255,
+      blue: CGFloat(argb & 0xFF) / 255,
+      alpha: CGFloat((argb >> 24) & 0xFF) / 255)
+  }
 }

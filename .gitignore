@@ -41,6 +41,12 @@ migrate_working_dir/
 **/.cxx/
 **/GeneratedPluginRegistrant.java
 
+# Signing — never commit keystores or signing config
+**/*.jks
+**/*.keystore
+**/key.properties
+**/keystore.properties
+
 # iOS/Xcode related
 **/Flutter/Generated.xcconfig
 **/Flutter/ephemeral/

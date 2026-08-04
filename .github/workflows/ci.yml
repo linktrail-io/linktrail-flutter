@@ -1,12 +1,12 @@
 name: CI
 
+# Note: no paths-ignore here — these jobs are required status checks on main/develop, and a
+# skipped-by-path-filter required check leaves docs-only PRs stuck "waiting" forever.
 on:
   push:
-    branches: [main]
-    paths-ignore: ["**.md", "LICENSE"]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
-    paths-ignore: ["**.md", "LICENSE"]
+    branches: [main, develop]
 
 concurrency:
   group: ci-${{ github.ref }}

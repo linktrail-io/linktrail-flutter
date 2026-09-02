@@ -1,3 +1,10 @@
+## 0.0.4
+
+- Bumped the wrapped iOS SDK to `LinkTrailSDK ~> 0.0.12` (Android stays on `io.linktrail:sdk:0.0.5`).
+- New `LinkTrailClickTokenSource.none` — opts out of reading the clipboard entirely, so no click
+  token is recovered for deferred attribution. Previously an unrecognized value silently fell back
+  to `pasteButton`; the native mapping now handles every case explicitly.
+
 ## 0.0.3
 
 - Bumped the wrapped native SDKs: iOS `LinkTrailSDK ~> 0.0.10`, Android `io.linktrail:sdk:0.0.5`.

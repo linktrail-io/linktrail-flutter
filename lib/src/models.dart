@@ -15,6 +15,10 @@ enum LinkTrailClickTokenSource {
   /// The SDK reads the clipboard itself at install — no UI, but iOS shows the
   /// system "Allow Paste" alert on first launch.
   automatic,
+
+  /// The clipboard is never read, so no click token is recovered. Deferred
+  /// attribution falls back to whatever the backend can infer without it.
+  none,
 }
 
 /// Where a delivered [LinkTrailDeepLink] came from.

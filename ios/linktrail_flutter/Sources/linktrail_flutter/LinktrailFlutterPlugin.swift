@@ -185,9 +185,19 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
       ),
       linkDomains: map["linkDomains"] as? [String] ?? [],
       autoTrackInstall: map["autoTrackInstall"] as? Bool ?? true,
-      clickTokenSource: (map["clickTokenSource"] as? String) == "automatic" ? .automatic : .pasteButton,
+      clickTokenSource: Self.parseClickTokenSource(map["clickTokenSource"] as? String),
       requireConsent: map["requireConsent"] as? Bool ?? true
     )
+  }
+
+  /// Maps the Dart `LinkTrailClickTokenSource` enum name onto the native enum. Unknown values fall
+  /// back to the SDK default (`pasteButton`) rather than silently picking the wrong source.
+  private static func parseClickTokenSource(_ name: String?) -> LinkTrailClickTokenSource {
+    switch name {
+    case "automatic": return .automatic
+    case "none": return .none
+    default: return .pasteButton
+    }
   }
 
   // -- Auto-capture (classic UIApplicationDelegate lifecycle). --

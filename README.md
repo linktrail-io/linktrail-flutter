@@ -18,7 +18,7 @@ or add it to your app's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  linktrail_flutter: ^0.0.3
+  linktrail_flutter: ^0.0.4
 ```
 
 Then `flutter pub get`. The native SDKs are pulled in automatically — no manual Gradle or CocoaPods

@@ -119,6 +119,16 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
       LinkTrail.shared?.setConsent(args?["granted"] as? Bool ?? false)
       result(nil)
 
+    case "getUserId":
+      result(UserIdentityBridge.storedUserId())
+
+    case "setUserId":
+      UserIdentityBridge.set(
+        userId: args?["userId"] as? String,
+        consented: args?["consented"] as? Bool ?? false,
+        sdk: LinkTrail.shared)
+      result(nil)
+
     case "trackEvent":
       guard let sdk = LinkTrail.shared else {
         result(FlutterError.notConfigured)

@@ -81,6 +81,17 @@ abstract class LinktrailFlutterPlatform extends PlatformInterface {
     throw UnimplementedError('updateConversionValue() has not been implemented.');
   }
 
+  /// Persists [userId] (or clears it when null) and forwards it to the native
+  /// SDK when [consented] and the native SDK supports identity.
+  Future<void> setUserId(String? userId, {required bool consented}) {
+    throw UnimplementedError('setUserId() has not been implemented.');
+  }
+
+  /// The persisted user id, if any.
+  Future<String?> getUserId() {
+    throw UnimplementedError('getUserId() has not been implemented.');
+  }
+
   Future<void> resetForTesting() {
     throw UnimplementedError('resetForTesting() has not been implemented.');
   }

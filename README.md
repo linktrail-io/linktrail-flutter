@@ -123,6 +123,29 @@ if (consent == 'denied') await LinkTrail.setConsent(false);
 
 Set `requireConsent: false` to opt out of gating and track automatically (the pre-consent behavior).
 
+## User identity (`setUserId` / `logout`)
+
+Tie a device to your own user so installs, opens and events can be attributed per user.
+
+```dart
+await LinkTrail.setUserId('u_8f3a1c');   // after login
+await LinkTrail.logout();                // after sign-out: clears the id locally, no network call
+final current = await LinkTrail.userId;  // persisted id or null
+```
+
+- **Never pass PII.** Use your own opaque internal id or a hash, not an email, phone number or name.
+- The id must match `^[A-Za-z0-9_.:-]{1,128}$`. An invalid id completes the future with an
+  `ArgumentError` and is not stored or sent. Setting a different id replaces the previous one.
+- The id is persisted across restarts. It is **never transmitted while consent is denied or
+  undecided** (it is only stored locally); once `setConsent(true)` is called, a stored id is
+  identified (once) and attached to subsequent opens and custom events.
+- Because there is no consent getter, replay your stored consent after `configure` on every launch
+  (see above) so a stored id resumes being sent.
+- **Native SDK requirement:** the identify call and attaching `userId` to events are done by the
+  wrapped native SDKs. The currently pinned versions predate this feature, so until the plugin pins
+  a native release with identity support the id is validated and persisted but not yet sent
+  (the plugin forwards to the native SDK only when it exposes the API).
+
 ## `linkDomains` — re-engagement host gating
 
 When `linkDomains` is **non-empty**, the SDK routes **re-engagement** opens (app already installed)

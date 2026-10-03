@@ -150,6 +150,24 @@ class MethodChannelLinktrailFlutter extends LinktrailFlutterPlatform {
   }
 
   @override
+  Future<void> setUserId(String? userId, {required bool consented}) async {
+    try {
+      await methodChannel.invokeMethod<void>('setUserId', {'userId': userId, 'consented': consented});
+    } on MissingPluginException {
+      // Embedder without identity support: best-effort.
+    }
+  }
+
+  @override
+  Future<String?> getUserId() async {
+    try {
+      return await methodChannel.invokeMethod<String>('getUserId');
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  @override
   Future<void> resetForTesting() {
     return methodChannel.invokeMethod<void>('resetForTesting');
   }

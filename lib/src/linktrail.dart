@@ -1,6 +1,7 @@
 import '../linktrail_flutter_platform_interface.dart';
 import 'errors.dart';
 import 'models.dart';
+import 'user_identity.dart';
 
 /// Dart facade over the native LinkTrail Android/iOS SDKs — mobile
 /// attribution and deferred deep linking.
@@ -14,7 +15,9 @@ abstract final class LinkTrail {
   /// [LinkTrailOptions.autoTrackInstall] is set to false, this also tracks
   /// the install/open automatically.
   static Future<void> configure({required String apiKey, LinkTrailOptions options = const LinkTrailOptions()}) {
-    return LinktrailFlutterPlatform.instance.configure(apiKey: apiKey, options: options);
+    return LinktrailFlutterPlatform.instance
+        .configure(apiKey: apiKey, options: options)
+        .then((_) => UserIdentity.restore());
   }
 
   /// Fires for every deep link the SDK delivers — both deferred (first
@@ -60,8 +63,22 @@ abstract final class LinkTrail {
   /// previously-granted user resumes tracking automatically. Deep links route
   /// regardless of consent.
   static Future<void> setConsent(bool granted) {
-    return LinktrailFlutterPlatform.instance.setConsent(granted);
+    return LinktrailFlutterPlatform.instance.setConsent(granted).then((_) => UserIdentity.onConsentChanged(granted));
   }
+
+  /// Associates this device with your app's own opaque [userId] so installs,
+  /// opens and events can be tied to a user. Use an internal id or a hash,
+  /// **never PII** (email, phone, name). Must match `^[A-Za-z0-9_.:-]{1,128}$`;
+  /// otherwise the returned future completes with an [ArgumentError] and nothing
+  /// is stored or sent. Persisted across launches; a different id replaces the
+  /// previous one. Never transmitted while consent is denied or undecided.
+  static Future<void> setUserId(String userId) => UserIdentity.setUserId(userId);
+
+  /// Clears the persisted user id locally (no network call).
+  static Future<void> logout() => UserIdentity.logout();
+
+  /// The persisted user id, or null when none is set.
+  static Future<String?> get userId => UserIdentity.userId;
 
   /// Tracks a custom event, optionally with a monetary [value] in [currency]
   /// (ISO 4217, e.g. `"USD"`).

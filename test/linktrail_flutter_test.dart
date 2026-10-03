@@ -58,6 +58,12 @@ class MockLinktrailFlutterPlatform with MockPlatformInterfaceMixin implements Li
   Future<void> updateConversionValue(int value, {LinkTrailCoarseConversionValue? coarseValue}) => Future.value();
 
   @override
+  Future<void> setUserId(String? userId, {required bool consented}) => Future.value();
+
+  @override
+  Future<String?> getUserId() => Future.value(null);
+
+  @override
   Future<void> resetForTesting() => Future.value();
 }
 

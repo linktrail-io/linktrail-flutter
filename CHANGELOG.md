@@ -1,3 +1,12 @@
+## Unreleased
+
+- **User identity:** new `LinkTrail.setUserId(String)`, `LinkTrail.logout()` and `LinkTrail.userId`.
+  Ids are validated (`^[A-Za-z0-9_.:-]{1,128}$`, `ArgumentError` otherwise), persisted across
+  launches, and never transmitted while consent is denied/undecided. Full effect (backend
+  `/v1/events/identify` and `userId` on events) requires a native SDK release that supports
+  identity; the plugin forwards to it when present and is otherwise a safe no-op. Native pins are
+  unchanged.
+
 ## 0.0.4
 
 - Bumped the wrapped iOS SDK to `LinkTrailSDK ~> 0.0.12` (Android stays on `io.linktrail:sdk:0.0.5`).

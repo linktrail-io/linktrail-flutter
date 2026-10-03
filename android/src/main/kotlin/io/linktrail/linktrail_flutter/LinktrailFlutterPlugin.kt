@@ -194,6 +194,8 @@ class LinktrailFlutterPlugin :
                 result.success(null)
             }
 
+            "getUserId", "setUserId" -> UserIdentityBridge.handle(context, LinkTrail.shared, call, result)
+
             "getLastAttribution" -> result.success(LinkTrail.shared?.lastAttribution?.toMap())
             "getLastDeepLink" -> result.success(LinkTrail.shared?.lastDeepLink?.toMap())
 

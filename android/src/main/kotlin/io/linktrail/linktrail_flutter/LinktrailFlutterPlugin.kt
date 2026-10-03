@@ -201,6 +201,8 @@ class LinktrailFlutterPlugin :
             "requestTrackingAuthorization" -> result.success(true)
             "registerForSKAdAttribution" -> result.success(null)
             "updateConversionValue" -> result.success(null)
+            // AdAttributionKit is Apple-only; false = nothing was updated.
+            "updatePostbackConversionValue" -> result.success(false)
 
             "resetForTesting" -> {
                 LinkTrail.resetForTesting(context)

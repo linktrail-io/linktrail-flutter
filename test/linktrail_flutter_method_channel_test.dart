@@ -39,6 +39,41 @@ void main() {
     expect(calls.single.arguments['options'], isA<Map>());
   });
 
+  test('updatePostbackConversionValue sends the typed arguments and returns the native result', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      return true;
+    });
+
+    final ok = await platform.updatePostbackConversionValue(
+      12,
+      coarseValue: LinkTrailCoarseConversionValue.high,
+      lockPostback: true,
+      conversionTypes: {LinkTrailConversionType.reengagement, LinkTrailConversionType.install},
+    );
+
+    expect(ok, isTrue);
+    expect(calls.single.method, 'updatePostbackConversionValue');
+    expect(calls.single.arguments, {
+      'value': 12,
+      'coarseValue': 'high',
+      'lockPostback': true,
+      'conversionTypes': ['install', 'reengagement'],
+    });
+  });
+
+  test('updatePostbackConversionValue defaults to all types, unlocked, and treats null as false', () async {
+    final ok = await platform.updatePostbackConversionValue(3);
+
+    expect(ok, isFalse);
+    expect(calls.single.arguments, {
+      'value': 3,
+      'coarseValue': null,
+      'lockPostback': false,
+      'conversionTypes': <String>[],
+    });
+  });
+
   test('trackEvent decodes the returned map', () async {
     final result = await platform.trackEvent(name: 'test_event');
 

@@ -161,6 +161,21 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
       LinkTrail.shared?.updateConversionValue(value, coarseValue: coarse)
       result(nil)
 
+    case "updatePostbackConversionValue":
+      guard let sdk = LinkTrail.shared else {
+        result(false)
+        return
+      }
+      let value = args?["value"] as? Int ?? 0
+      let coarse = (args?["coarseValue"] as? String).flatMap(LinkTrailCoarseConversionValue.init(dartName:))
+      let lock = args?["lockPostback"] as? Bool ?? false
+      let types = Set((args?["conversionTypes"] as? [String] ?? []).compactMap(LinkTrailConversionType.init(rawValue:)))
+      Task {
+        result(
+          await sdk.updatePostbackConversionValue(
+            value, coarseValue: coarse, lockPostback: lock, conversionTypes: types.isEmpty ? nil : types))
+      }
+
     case "resetForTesting":
       LinkTrail.resetForTesting()
       result(nil)

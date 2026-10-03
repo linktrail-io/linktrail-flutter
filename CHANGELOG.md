@@ -1,3 +1,14 @@
+## Unreleased
+
+- **iOS privacy manifest enabled.** `PrivacyInfo.xcprivacy` now declares what the wrapped SDK
+  collects (a linked, non-tracking, app-scoped device ID for analytics/app functionality) and its
+  `UserDefaults` use (reason `CA92.1`), mirroring the native `LinkTrailSDK` manifest, and is bundled
+  via both CocoaPods (`resource_bundles`) and Swift Package Manager (`resources`).
+- `requestTrackingAuthorization()` on Android: documented as "not applicable, resolves `true`" (no
+  OS tracking-permission gate); the React Native wrapper is aligned to the same behavior.
+- Tests: real `MethodChannel`/`EventChannel` tests (argument encoding, result decoding, error
+  mapping, deep-link/attribution/error event streams) in addition to the mock-platform tests.
+
 ## 0.0.4
 
 - Bumped the wrapped iOS SDK to `LinkTrailSDK ~> 0.0.12` (Android stays on `io.linktrail:sdk:0.0.5`).

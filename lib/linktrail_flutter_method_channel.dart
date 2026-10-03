@@ -150,6 +150,23 @@ class MethodChannelLinktrailFlutter extends LinktrailFlutterPlatform {
   }
 
   @override
+  Future<bool> updatePostbackConversionValue(
+    int value, {
+    LinkTrailCoarseConversionValue? coarseValue,
+    bool lockPostback = false,
+    Set<LinkTrailConversionType>? conversionTypes,
+  }) async {
+    final ok = await methodChannel.invokeMethod<bool>('updatePostbackConversionValue', {
+      'value': value,
+      'coarseValue': coarseValue?.name,
+      'lockPostback': lockPostback,
+      // Sorted so the wire format is deterministic; empty/null both mean "all types".
+      'conversionTypes': (conversionTypes?.map((t) => t.name).toList() ?? <String>[])..sort(),
+    });
+    return ok ?? false;
+  }
+
+  @override
   Future<void> resetForTesting() {
     return methodChannel.invokeMethod<void>('resetForTesting');
   }

@@ -88,6 +88,13 @@ await LinkTrail.lastDeepLink;
 await LinkTrail.requestTrackingAuthorization();            // App Tracking Transparency
 await LinkTrail.registerForSKAdAttribution();
 await LinkTrail.updateConversionValue(3, coarseValue: LinkTrailCoarseConversionValue.medium);
+// AdAttributionKit on iOS 17.4+ (SKAdNetwork before); conversionTypes applies on iOS 18+.
+// Resolves false on Android.
+final ok = await LinkTrail.updatePostbackConversionValue(
+  12,
+  coarseValue: LinkTrailCoarseConversionValue.high,
+  conversionTypes: {LinkTrailConversionType.install},
+);
 ```
 
 Errors from the native SDKs arrive as typed `LinkTrailException` subtypes on `onError`, and are

@@ -4,6 +4,10 @@ enum LinkTrailLogLevel { debug, info, warning, error, none }
 /// Coarse SKAdNetwork conversion value bucket (iOS-only).
 enum LinkTrailCoarseConversionValue { low, medium, high }
 
+/// Which conversions an AdAttributionKit postback update applies to (iOS 18+;
+/// earlier versions update every type).
+enum LinkTrailConversionType { install, reengagement }
+
 /// How the iOS SDK reads the deferred-attribution click token from the clipboard.
 /// iOS-only — ignored on Android, which uses the Play Install Referrer.
 enum LinkTrailClickTokenSource {

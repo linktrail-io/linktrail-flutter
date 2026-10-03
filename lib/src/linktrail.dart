@@ -86,6 +86,24 @@ abstract final class LinkTrail {
     return LinktrailFlutterPlatform.instance.registerForSKAdAttribution();
   }
 
+  /// Updates pending AdAttributionKit (iOS 17.4+) and SKAdNetwork postbacks, with
+  /// postback locking and, on iOS 18+, per-conversion-type updates. Resolves
+  /// `true` when every framework call succeeded (also when the user never saw an
+  /// ad, since there is nothing to update). Android: resolves `false`.
+  static Future<bool> updatePostbackConversionValue(
+    int value, {
+    LinkTrailCoarseConversionValue? coarseValue,
+    bool lockPostback = false,
+    Set<LinkTrailConversionType>? conversionTypes,
+  }) {
+    return LinktrailFlutterPlatform.instance.updatePostbackConversionValue(
+      value,
+      coarseValue: coarseValue,
+      lockPostback: lockPostback,
+      conversionTypes: conversionTypes,
+    );
+  }
+
   /// Updates the SKAdNetwork conversion value. iOS-only; no-op on Android.
   static Future<void> updateConversionValue(int value, {LinkTrailCoarseConversionValue? coarseValue}) {
     return LinktrailFlutterPlatform.instance.updateConversionValue(value, coarseValue: coarseValue);

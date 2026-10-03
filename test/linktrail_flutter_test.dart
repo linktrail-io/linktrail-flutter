@@ -57,6 +57,21 @@ class MockLinktrailFlutterPlatform with MockPlatformInterfaceMixin implements Li
   @override
   Future<void> updateConversionValue(int value, {LinkTrailCoarseConversionValue? coarseValue}) => Future.value();
 
+  bool? lastLock;
+  Set<LinkTrailConversionType>? lastTypes;
+
+  @override
+  Future<bool> updatePostbackConversionValue(
+    int value, {
+    LinkTrailCoarseConversionValue? coarseValue,
+    bool lockPostback = false,
+    Set<LinkTrailConversionType>? conversionTypes,
+  }) async {
+    lastLock = lockPostback;
+    lastTypes = conversionTypes;
+    return true;
+  }
+
   @override
   Future<void> resetForTesting() => Future.value();
 }

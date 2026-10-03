@@ -81,6 +81,15 @@ abstract class LinktrailFlutterPlatform extends PlatformInterface {
     throw UnimplementedError('updateConversionValue() has not been implemented.');
   }
 
+  Future<bool> updatePostbackConversionValue(
+    int value, {
+    LinkTrailCoarseConversionValue? coarseValue,
+    bool lockPostback = false,
+    Set<LinkTrailConversionType>? conversionTypes,
+  }) {
+    throw UnimplementedError('updatePostbackConversionValue() has not been implemented.');
+  }
+
   Future<void> resetForTesting() {
     throw UnimplementedError('resetForTesting() has not been implemented.');
   }

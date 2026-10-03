@@ -174,6 +174,29 @@ class LinktrailFlutterPlugin :
                 }
             }
 
+            "trackRevenue" -> {
+                val transactionId = call.argument<String>("transactionId")
+                val value = call.argument<Double>("value")
+                val currency = call.argument<String>("currency")
+                val productId = call.argument<String>("productId")
+                val sdk = LinkTrail.shared ?: return result.errorNotConfigured()
+                if (transactionId == null || value == null || currency == null) {
+                    result.error("invalidArgument", "trackRevenue requires transactionId, value and currency.", null)
+                    return
+                }
+                scope.launch {
+                    try {
+                        val revenue = sdk.trackRevenueAsync(transactionId, value, currency, productId)
+                        result.success(mapOf("id" to revenue.id, "attributed" to revenue.attributed, "duplicate" to revenue.duplicate))
+                    } catch (e: IllegalArgumentException) {
+                        // trackRevenueAsync signals invalid input with IllegalArgumentException.
+                        result.error("invalidRevenue", e.message, null)
+                    } catch (e: Throwable) {
+                        result.error(e)
+                    }
+                }
+            }
+
             // Android has no clipboard click token (it uses the Play Install Referrer), so the
             // token is ignored and this behaves like a normal install.
             "trackInstallWithClickToken" -> {

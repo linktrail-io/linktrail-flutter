@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'linktrail_flutter_platform_interface.dart';
 import 'src/errors.dart';
 import 'src/models.dart';
+import 'src/revenue.dart';
 
 /// An implementation of [LinktrailFlutterPlatform] that uses method channels.
 class MethodChannelLinktrailFlutter extends LinktrailFlutterPlatform {
@@ -95,6 +96,32 @@ class MethodChannelLinktrailFlutter extends LinktrailFlutterPlatform {
         'currency': currency,
       });
       return LinkTrailEventResult.fromMap(map!);
+    } on PlatformException catch (e) {
+      throw LinkTrailException.fromPlatformException(e);
+    }
+  }
+
+  @override
+  Future<LinkTrailRevenueResult> trackRevenue({
+    required String transactionId,
+    required double value,
+    required String currency,
+    String? productId,
+  }) async {
+    final args = LinkTrailRevenueArgs.validate(
+      transactionId: transactionId,
+      value: value,
+      currency: currency,
+      productId: productId,
+    );
+    try {
+      final map = await methodChannel.invokeMapMethod<Object?, Object?>('trackRevenue', {
+        'transactionId': args.transactionId,
+        'value': args.value,
+        'currency': args.currency,
+        'productId': args.productId,
+      });
+      return LinkTrailRevenueResult.fromMap(map!);
     } on PlatformException catch (e) {
       throw LinkTrailException.fromPlatformException(e);
     }

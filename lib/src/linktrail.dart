@@ -1,6 +1,7 @@
 import '../linktrail_flutter_platform_interface.dart';
 import 'errors.dart';
 import 'models.dart';
+import 'revenue.dart';
 
 /// Dart facade over the native LinkTrail Android/iOS SDKs — mobile
 /// attribution and deferred deep linking.
@@ -67,6 +68,38 @@ abstract final class LinkTrail {
   /// (ISO 4217, e.g. `"USD"`).
   static Future<LinkTrailEventResult> trackEvent({required String name, double? value, String? currency}) {
     return LinktrailFlutterPlatform.instance.trackEvent(name: name, value: value, currency: currency);
+  }
+
+  /// Tracks a purchase for revenue attribution (ROAS).
+  ///
+  /// [transactionId] is the store's unique id for the purchase (for example
+  /// `PurchaseDetails.purchaseID`) and is the dedupe key: retrying the same id
+  /// is always safe and is never counted twice (see
+  /// [LinkTrailRevenueResult.duplicate]). [value] is the amount in [currency]
+  /// (ISO 4217, e.g. `"USD"`, case-insensitive). [productId] is optional.
+  ///
+  /// Throws [LinkTrailInvalidRevenueException] (nothing is sent) if
+  /// [transactionId] is not 1-255 characters, [value] is not a finite number
+  /// >= 0, or [currency] is not 3 letters. Failed sends are queued and retried
+  /// by the native SDKs. Consent rules match [trackEvent].
+  static Future<LinkTrailRevenueResult> trackRevenue({
+    required String transactionId,
+    required double value,
+    required String currency,
+    String? productId,
+  }) async {
+    final args = LinkTrailRevenueArgs.validate(
+      transactionId: transactionId,
+      value: value,
+      currency: currency,
+      productId: productId,
+    );
+    return await LinktrailFlutterPlatform.instance.trackRevenue(
+      transactionId: args.transactionId,
+      value: args.value,
+      currency: args.currency,
+      productId: args.productId,
+    );
   }
 
   /// The most recent attribution result, if any, without re-fetching.

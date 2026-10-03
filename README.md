@@ -79,6 +79,7 @@ LinkTrail.onError;        // Stream<LinkTrailException>
 await LinkTrail.handleDeepLink(uri);                       // resolve a link manually (also auto-captured)
 await LinkTrail.trackInstall(force: false);                // called automatically by configure()
 await LinkTrail.trackEvent(name: 'purchase', value: 9.99, currency: 'USD');
+await LinkTrail.trackRevenue(transactionId: 'GPA.1234', value: 9.99, currency: 'USD');   // see "Revenue tracking"
 
 // Last known state
 await LinkTrail.lastAttribution;
@@ -100,6 +101,59 @@ try {
   // the key was rejected by the server
 }
 ```
+
+## Revenue tracking
+
+`LinkTrail.trackRevenue` records a purchase so revenue and ROAS can be attributed to the campaign
+that drove the install:
+
+```dart
+final result = await LinkTrail.trackRevenue(
+  transactionId: 'GPA.3345-1234-5678-90123', // required: the store's id for this purchase
+  value: 9.99,                                // finite, >= 0
+  currency: 'USD',                            // 3-letter ISO 4217 code, case-insensitive
+  productId: 'pro_monthly',                   // optional
+);
+// result.attributed - matched to a campaign click
+// result.duplicate  - this transactionId was already recorded; nothing was double-counted
+```
+
+**Retries are safe.** `transactionId` is the dedupe key on the server and on the device, and failed
+sends are queued and retried by the native SDKs. Calling `trackRevenue` again for the same purchase
+(for example on every app launch while restoring purchases) never double-counts. Use an id that is
+stable and unique per purchase.
+
+Invalid input (an id that is not 1-255 characters, a negative or non-finite value, a currency that
+is not 3 letters) throws `LinkTrailInvalidRevenueException` and nothing is sent. Consent rules match
+`trackEvent`.
+
+With [`in_app_purchase`](https://pub.dev/packages/in_app_purchase), report from the purchase stream
+once the purchase is verified, using the store's transaction id:
+
+```dart
+InAppPurchase.instance.purchaseStream.listen((purchases) async {
+  for (final purchase in purchases) {
+    if (purchase.status != PurchaseStatus.purchased) continue; // not restored/pending
+    // purchase.purchaseID is the iOS transactionIdentifier and, on Android, the Play orderId.
+    final id = purchase.purchaseID;
+    final product = productsById[purchase.productID]; // the ProductDetails you loaded
+    if (id != null && product != null) {
+      await LinkTrail.trackRevenue(
+        transactionId: id,
+        value: product.rawPrice,
+        currency: product.currencyCode,
+        productId: purchase.productID,
+      );
+    }
+    if (purchase.pendingCompletePurchase) {
+      await InAppPurchase.instance.completePurchase(purchase);
+    }
+  }
+});
+```
+
+The store-specific StoreKit / Play Billing helpers of the native SDKs are not exposed in Dart;
+report purchases through `trackRevenue` as above.
 
 ## Consent gating (GDPR / ePrivacy)
 

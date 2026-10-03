@@ -1,3 +1,13 @@
+## Unreleased
+
+- New `LinkTrail.trackRevenue(transactionId:, value:, currency:, productId:)` bridging the native
+  revenue API on iOS and Android. Returns a `LinkTrailRevenueResult` (`id`, `attributed`,
+  `duplicate`); the transaction id is the dedupe key, so retries are safe. Arguments are validated
+  and normalised in Dart (currency uppercased, id 1-255 chars, value finite and >= 0); invalid
+  input throws the new `LinkTrailInvalidRevenueException`.
+- Requires native SDK releases that include revenue support. The iOS `LinkTrailSDK` and Android
+  `io.linktrail:sdk` dependency pins are not yet bumped; this is not releasable until they are.
+
 ## 0.0.4
 
 - Bumped the wrapped iOS SDK to `LinkTrailSDK ~> 0.0.12` (Android stays on `io.linktrail:sdk:0.0.5`).

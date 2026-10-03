@@ -3,6 +3,7 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'linktrail_flutter_method_channel.dart';
 import 'src/errors.dart';
 import 'src/models.dart';
+import 'src/revenue.dart';
 
 abstract class LinktrailFlutterPlatform extends PlatformInterface {
   /// Constructs a LinktrailFlutterPlatform.
@@ -59,6 +60,15 @@ abstract class LinktrailFlutterPlatform extends PlatformInterface {
 
   Future<LinkTrailEventResult> trackEvent({required String name, double? value, String? currency}) {
     throw UnimplementedError('trackEvent() has not been implemented.');
+  }
+
+  Future<LinkTrailRevenueResult> trackRevenue({
+    required String transactionId,
+    required double value,
+    required String currency,
+    String? productId,
+  }) {
+    throw UnimplementedError('trackRevenue() has not been implemented.');
   }
 
   Future<LinkTrailAttribution?> getLastAttribution() {

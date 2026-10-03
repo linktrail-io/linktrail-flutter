@@ -33,6 +33,8 @@ sealed class LinkTrailException implements Exception {
         return const LinkTrailNotALinkTrailUrlException();
       case 'missingApiKey':
         return const LinkTrailMissingApiKeyException();
+      case 'invalidRevenue':
+        return LinkTrailInvalidRevenueException(message);
       case 'invalidApiKey':
         return const LinkTrailInvalidApiKeyException();
       default:
@@ -78,6 +80,12 @@ class LinkTrailMissingApiKeyException extends LinkTrailException {
 
 class LinkTrailInvalidApiKeyException extends LinkTrailException {
   const LinkTrailInvalidApiKeyException() : super('The API key was rejected by the server.');
+}
+
+/// Thrown by [LinkTrail.trackRevenue] when the transaction id, value or
+/// currency is invalid. Nothing is sent.
+class LinkTrailInvalidRevenueException extends LinkTrailException {
+  const LinkTrailInvalidRevenueException(super.message);
 }
 
 /// Fallback for a native error code the Dart layer doesn't recognize yet.

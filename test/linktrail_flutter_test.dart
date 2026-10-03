@@ -18,6 +18,16 @@ class MockLinktrailFlutterPlatform with MockPlatformInterfaceMixin implements Li
   }
 
   @override
+  Future<LinkTrailRevenueResult> trackRevenue({
+    required String transactionId,
+    required double value,
+    required String currency,
+    String? productId,
+  }) {
+    return Future.value(const LinkTrailRevenueResult(id: 2, attributed: true));
+  }
+
+  @override
   Stream<LinkTrailLinkEvent> get onLink => const Stream.empty();
 
   @override

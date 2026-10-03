@@ -138,6 +138,31 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
         }
       }
 
+    case "trackRevenue":
+      guard let sdk = LinkTrail.shared else {
+        result(FlutterError.notConfigured)
+        return
+      }
+      guard let transactionId = args?["transactionId"] as? String,
+        let value = (args?["value"] as? NSNumber)?.doubleValue,
+        let currency = args?["currency"] as? String
+      else {
+        result(
+          FlutterError(
+            code: "invalidArgument", message: "trackRevenue requires transactionId, value and currency.", details: nil))
+        return
+      }
+      let productId = args?["productId"] as? String
+      Task {
+        do {
+          let revenue = try await sdk.trackRevenue(
+            transactionId: transactionId, value: value, currency: currency, productId: productId)
+          result(["id": revenue.id, "attributed": revenue.attributed, "duplicate": revenue.duplicate])
+        } catch {
+          result(toFlutterError(error))
+        }
+      }
+
     case "getLastAttribution":
       result(LinkTrail.shared?.lastAttribution?.toMap())
 
@@ -396,6 +421,7 @@ private func toFlutterError(_ error: Error) -> FlutterError {
     case LinkTrailError.notALinkTrailURL: ("notALinkTrailUrl", [:])
     case LinkTrailError.missingAPIKey: ("missingApiKey", [:])
     case LinkTrailError.invalidAPIKey: ("invalidApiKey", [:])
+    case is LinkTrailRevenueError: ("invalidRevenue", [:])
     default: ("unknown", [:])
     }
   return FlutterError(code: code, message: error.localizedDescription, details: details)

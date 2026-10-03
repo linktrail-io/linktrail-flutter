@@ -5,23 +5,15 @@ import io.flutter.plugin.common.MethodChannel
 import org.mockito.Mockito
 import kotlin.test.Test
 
-/*
- * This demonstrates a simple unit test of the Kotlin portion of this plugin's implementation.
- *
- * Once you have built the plugin's example app, you can run these tests from the command
- * line by running `./gradlew testDebugUnitTest` in the `example/android/` directory, or
- * you can run them directly from IDEs that support JUnit such as Android Studio.
- */
-
 internal class LinktrailFlutterPluginTest {
+    // Android has no ATT-style gate: requestTrackingAuthorization is "not applicable" and resolves true.
     @Test
-    fun onMethodCall_getPlatformVersion_returnsExpectedValue() {
+    fun onMethodCall_requestTrackingAuthorization_resolvesTrue() {
         val plugin = LinktrailFlutterPlugin()
 
-        val call = MethodCall("getPlatformVersion", null)
         val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
-        plugin.onMethodCall(call, mockResult)
+        plugin.onMethodCall(MethodCall("requestTrackingAuthorization", null), mockResult)
 
-        Mockito.verify(mockResult).success("Android " + android.os.Build.VERSION.RELEASE)
+        Mockito.verify(mockResult).success(true)
     }
 }

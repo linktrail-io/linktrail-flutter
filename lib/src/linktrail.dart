@@ -75,8 +75,13 @@ abstract final class LinkTrail {
   /// The most recent delivered deep link, if any, without re-fetching.
   static Future<LinkTrailDeepLink?> get lastDeepLink => LinktrailFlutterPlatform.instance.getLastDeepLink();
 
-  /// Requests App Tracking Transparency authorization. iOS-only; resolves to
-  /// `true` immediately on Android.
+  /// Requests App Tracking Transparency (ATT) authorization on iOS and resolves
+  /// to whether tracking is authorized.
+  ///
+  /// Not applicable on Android: there is no OS-level tracking-permission gate,
+  /// so tracking is not platform-restricted and this resolves `true` without
+  /// showing anything. Use [setConsent] for your own consent flow on every
+  /// platform. (The React Native wrapper resolves `true` on Android as well.)
   static Future<bool> requestTrackingAuthorization() {
     return LinktrailFlutterPlatform.instance.requestTrackingAuthorization();
   }

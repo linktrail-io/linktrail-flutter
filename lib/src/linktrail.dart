@@ -30,7 +30,10 @@ abstract final class LinkTrail {
 
   /// Resolves an incoming link directly, in addition to the automatic
   /// capture — useful for testing or for links your app already had to parse
-  /// for other reasons. Returns whether the SDK recognized and handled it.
+  /// for other reasons. Returns whether the SDK recognized and handled it:
+  /// only `https` links on `linktrail.io` or a [LinkTrailOptions.linkDomains]
+  /// host are claimed; any other URL returns `false` with no network call, so
+  /// route it yourself.
   static Future<bool> handleDeepLink(Uri url) {
     return LinktrailFlutterPlatform.instance.handleDeepLink(url);
   }

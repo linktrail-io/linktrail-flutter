@@ -17,7 +17,7 @@ E2E panel switched on (`--dart-define=E2E=true`), installs it and runs the Maest
 | --- | --- | --- |
 | `consent_allow` | nothing | the consent sheet commits "Allow tracking" |
 | `consent_deny` | nothing | the consent sheet commits "Deny"; no link is delivered |
-| `deferred_allow` | `LINKTRAIL_KEY` | a real click, then a fresh install and allow: `onLink` fires exactly once, `source: deferred`, a `/products/…` path and `voucher=SUMMER25` in `customData`. Then the backend check: recorded, attributed, `click_token`, 1 install |
+| `deferred_allow` | `LINKTRAIL_KEY` | a real click, then a fresh install and allow: `onLink` fires exactly once, `source: deferred`, the path `/products/aj1` and `voucher=SUMMER25` in `customData`. Then the backend check: recorded, attributed, `click_token`, 1 install |
 | `deferred_deny` | `LINKTRAIL_KEY` | a real click, then deny: no `onLink`. Then the backend check: not recorded, 0 installs |
 | `reengagement` | `LINKTRAIL_KEY` | allow, then a campaign link arrives: `onLink` fires once with `source: reengagement` |
 | `track_event` | `LINKTRAIL_KEY` | allow, then `trackEvent("e2e_purchase", value: 9.99, currency: "USD")` succeeds |
@@ -66,5 +66,5 @@ through a private temp file and never prints either secret. The real flows make 
 Repository secrets: `LINKTRAIL_KEY` and `E2E_TOKEN`. When they are missing (for example on a fork
 pull request) the real flows are skipped with a notice.
 
-The backend check needs the app ids in the backend's `E2E_APP_IDENTIFIERS`: `io.linktrail.example`
+The backend check needs the app ids in the backend's `E2E_APP_IDENTIFIERS`: `io.linktrail.demo.store`
 (Android) and `io.linktrail.kickflipdemo` (iOS).

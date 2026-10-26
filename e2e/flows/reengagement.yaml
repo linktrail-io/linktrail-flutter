@@ -23,5 +23,5 @@ tags: [real]
       - tapOn: { id: "e2e-handle-link" }
 - extendedWaitUntil: { visible: "onLink count: 1", timeout: 30000 }
 - assertVisible: "source: reengagement"
-- assertVisible: { text: "path: /products/.+" }
+- assertVisible: "path: /products/aj1"
 - assertVisible: { text: "customData: .*voucher=SUMMER25.*" }

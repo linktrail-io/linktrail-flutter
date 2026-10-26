@@ -43,7 +43,7 @@ CLICK_WAIT="${CLICK_WAIT:-60}"
 ANDROID_UA="Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36"
 ALL_FLOWS="consent_allow consent_deny deferred_allow deferred_deny reengagement track_event"
 
-if [ "$PLATFORM" = android ]; then APP_ID="io.linktrail.example"; else APP_ID="io.linktrail.kickflipdemo"; fi
+if [ "$PLATFORM" = android ]; then APP_ID="io.linktrail.demo.store"; else APP_ID="io.linktrail.kickflipdemo"; fi
 
 # shellcheck source=e2e/verify.sh
 source "$E2E/verify.sh"

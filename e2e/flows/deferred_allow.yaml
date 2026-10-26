@@ -22,7 +22,7 @@ tags: [real]
 - extendedWaitUntil: { visible: "onLink count: 1", timeout: 30000 }
 - assertVisible: "consent: granted"
 - assertVisible: "source: deferred"
-- assertVisible: { text: "path: /products/.+" }
+- assertVisible: "path: /products/aj1"
 - assertVisible: { text: "customData: .*voucher=SUMMER25.*" }
 # Exactly once: give a duplicate delivery time to arrive, then check the count did not move.
 - waitForAnimationToEnd: { timeout: 5000 }

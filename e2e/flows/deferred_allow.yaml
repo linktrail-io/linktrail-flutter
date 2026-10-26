@@ -1,0 +1,30 @@
+# Deferred link · consent allow (REAL). e2e/run.sh stages a real click first:
+#   Android: curl click → lt_click token → adb setprop debug.linktrail.referrer "lt_click=<token>"
+#   iOS:     ios/safari_click.yaml → the interstitial puts the token on the clipboard
+# Then this flow installs fresh, allows, and checks that onLink fired exactly once with the linked
+# product path and the voucher customData. run.sh then asks the backend: recorded, attributed,
+# matchType click_token, installCount 1.
+appId: ${APP_ID}
+tags: [real]
+---
+- launchApp: { clearState: true }
+- extendedWaitUntil: { visible: "Help us attribute your visit", timeout: 60000 }
+- runFlow:
+    when: { platform: Android }
+    commands:
+      - tapOn: "Allow tracking"
+      - tapOn: "Continue"
+- runFlow:
+    when: { platform: iOS }
+    commands:
+      # The native UIPasteControl: the tap is the consent and hands the token to the SDK.
+      - tapOn: { text: "^Paste$" }
+- extendedWaitUntil: { visible: "onLink count: 1", timeout: 30000 }
+- assertVisible: "consent: granted"
+- assertVisible: "source: deferred"
+- assertVisible: { text: "path: /products/.+" }
+- assertVisible: { text: "customData: .*voucher=SUMMER25.*" }
+# Exactly once: give a duplicate delivery time to arrive, then check the count did not move.
+- waitForAnimationToEnd: { timeout: 5000 }
+- assertNotVisible: "onLink count: 2"
+- assertVisible: "onLink count: 1"

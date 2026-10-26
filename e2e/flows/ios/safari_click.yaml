@@ -1,0 +1,14 @@
+# iOS only, run by e2e/run.sh before deferred_allow/deferred_deny: open the campaign link in Safari
+# so the LinkTrail interstitial stages lt_click=<token> on the simulator clipboard. run.sh reads the
+# token with `simctl pbpaste` for the backend check. Mirrors the iOS-SDK pasteButton flows.
+appId: com.apple.mobilesafari
+---
+- stopApp
+- launchApp
+- tapOn: { id: "TabBarItemTitle" }
+- inputText: ${LINK_URL}
+- pressKey: Enter
+- extendedWaitUntil: { visible: { text: "Continue to( the)? App Store" }, timeout: 20000, optional: true }
+- tapOn: { text: "Continue to( the)? App Store", optional: true }
+- tapOn: { text: "OK", optional: true }
+- pressKey: Home

@@ -1,0 +1,12 @@
+# trackEvent with a value (REAL): consent allow, then LinkTrail.trackEvent(name: "e2e_purchase",
+# value: 9.99, currency: "USD") from the E2E panel; the backend must accept it.
+appId: ${APP_ID}
+tags: [real]
+---
+- launchApp: { clearState: true }
+- extendedWaitUntil: { visible: "Help us attribute your visit", timeout: 60000 }
+- tapOn: "Allow tracking"
+- tapOn: "Continue"
+- extendedWaitUntil: { visible: "consent: granted", timeout: 15000 }
+- tapOn: { id: "e2e-track-event-button" }
+- extendedWaitUntil: { visible: { text: "trackEvent: ok id=.* value=9.99 USD" }, timeout: 30000 }

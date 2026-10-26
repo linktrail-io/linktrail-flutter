@@ -10,8 +10,9 @@ import '../consent.dart';
 /// or `null` if the user skipped (stays undecided).
 ///
 /// Layout: an **Allow / Deny** selectable row (purely a selection — takes no
-/// action), then a full-width **paste** button (tapping it means *allow* +
-/// reads the iOS deferred token), then **Skip** last.
+/// action), then on iOS a full-width **paste** button (tapping it means *allow* +
+/// reads the deferred token), then **Continue** (commits the selection), then
+/// **Skip** last.
 Future<Consent?> showConsentSheet(BuildContext context, {void Function(String token)? onToken}) {
   return showModalBottomSheet<Consent>(
     context: context,
@@ -73,29 +74,31 @@ class _ConsentSheetState extends State<_ConsentSheet> {
             ],
           ),
           const SizedBox(height: 16),
-          // Full-width primary action below the row.
-          //  • iOS: the native paste button (tapping it = allow + read the deferred token).
-          //  • Android: a "Continue" button that commits the selected Allow/Deny choice (there is no
-          //    paste control on Android — the Play Install Referrer handles deferred attribution).
-          if (!kIsWeb && Platform.isIOS)
+          // Full-width actions below the row.
+          //  • iOS: the native paste button first (tapping it = allow + read the deferred token).
+          //  • Every platform: a "Continue" button that commits the selected Allow/Deny choice. On iOS
+          //    it is the way to answer without a link on the clipboard, or to deny. Android has no
+          //    paste control: the Play Install Referrer handles deferred attribution there.
+          if (!kIsWeb && Platform.isIOS) ...[
             LinkTrailPasteButton(
               color: scheme.primary,
               onToken: (token) {
                 widget.onToken?.call(token);
                 if (mounted) Navigator.pop(context, null); // onToken commits; nothing more to do
               },
-            )
-          else
-            SizedBox(
-              height: 52,
-              child: FilledButton(
-                onPressed: () => Navigator.pop(context, _selected),
-                style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-                child: const Text('Continue', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              ),
             ),
+            const SizedBox(height: 12),
+          ],
+          SizedBox(
+            height: 52,
+            child: FilledButton(
+              onPressed: () => Navigator.pop(context, _selected),
+              style: FilledButton.styleFrom(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: const Text('Continue', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            ),
+          ),
           const SizedBox(height: 4),
           // Skip — last button, simply dismisses (stays undecided).
           TextButton(

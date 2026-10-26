@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:linktrail_flutter/linktrail_flutter.dart';
 
 import 'consent.dart';
+import 'e2e.dart';
 import 'store.dart';
 import 'screens/home_screen.dart';
 import 'screens/product_screen.dart';
@@ -33,6 +34,7 @@ class KickFlipDemoApp extends StatefulWidget {
 class _KickFlipDemoAppState extends State<KickFlipDemoApp> {
   final Store _store = Store();
   final ConsentStore _consentStore = ConsentStore();
+  final E2EState _e2e = E2EState();
   String? _status;
 
   final _navigatorKey = GlobalKey<NavigatorState>();
@@ -53,6 +55,7 @@ class _KickFlipDemoAppState extends State<KickFlipDemoApp> {
     // after configure — if we awaited consent-loading first, the delivery would land with no
     // listener and be lost.
     _onLinkSub = LinkTrail.onLink.listen((event) {
+      _e2e.recordLink(event);
       _store.route(event.link, event.source);
     });
     _onAttributionSub = LinkTrail.onAttribution.listen((attribution) {
@@ -87,6 +90,7 @@ class _KickFlipDemoAppState extends State<KickFlipDemoApp> {
   Future<void> _applyConsent() async {
     final consent = await _consentStore.load();
     if (consent != Consent.undecided) {
+      _e2e.recordConsent(consent.name);
       await LinkTrail.setConsent(consent == Consent.granted);
       if (consent == Consent.granted) await LinkTrail.trackInstall();
       return;
@@ -106,6 +110,7 @@ class _KickFlipDemoAppState extends State<KickFlipDemoApp> {
       onToken: (token) async {
         await LinkTrail.setConsent(true);
         await _consentStore.save(Consent.granted);
+        _e2e.recordConsent(Consent.granted.name);
         try {
           await LinkTrail.trackInstallWithClickToken(token);
           setState(() => _status = 'Consent granted · install tracked (token)');
@@ -116,6 +121,7 @@ class _KickFlipDemoAppState extends State<KickFlipDemoApp> {
     );
     if (decision == null) return; // skipped, or iOS paste already handled in onToken
     await _consentStore.save(decision);
+    _e2e.recordConsent(decision.name);
     await LinkTrail.setConsent(decision == Consent.granted);
     if (decision == Consent.granted) await LinkTrail.trackInstall();
     setState(() => _status = 'Consent · ${decision.name}');
@@ -134,6 +140,7 @@ class _KickFlipDemoAppState extends State<KickFlipDemoApp> {
     _onErrorSub?.cancel();
     _onAttributionSub?.cancel();
     _store.removeListener(_onStoreChanged);
+    _e2e.dispose();
     super.dispose();
   }
 
@@ -183,13 +190,20 @@ class _KickFlipDemoAppState extends State<KickFlipDemoApp> {
           ),
           body: SafeArea(
             top: false,
-            child: switch (screen) {
-              HomeScreen() => HomeScreenView(store: _store, status: _status),
-              ProductDetailScreen(:final product, :final voucher) => ProductScreenView(
-                product: product,
-                voucher: voucher,
-              ),
-            },
+            child: Column(
+              children: [
+                if (kE2EPanel) E2EPanel(state: _e2e),
+                Expanded(
+                  child: switch (screen) {
+                    HomeScreen() => HomeScreenView(store: _store, status: _status),
+                    ProductDetailScreen(:final product, :final voucher) => ProductScreenView(
+                      product: product,
+                      voucher: voucher,
+                    ),
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),

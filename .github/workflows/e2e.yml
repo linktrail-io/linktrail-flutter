@@ -1,0 +1,212 @@
+name: E2E
+
+# Maestro smoke e2e for the plugin, against the example app built from this checkout. See TESTING.md.
+#   - native-versions: the plugin's pinned native SDKs vs the latest published (warn-only for now).
+#   - android: API 35 emulator on a hosted runner (KVM).
+#   - ios: simulator on the self-hosted Mac, serialised by the machine-wide lock (e2e/sim-lock.sh).
+#
+# Secrets (repository secrets, never printed):
+#   LINKTRAIL_KEY  SDK key for the workspace that owns the test link (kick.linktrail.io).
+#   E2E_TOKEN      X-E2E-Token for the private backend check GET /v1/e2e/clicks/<token>.
+# Without LINKTRAIL_KEY the real flows are skipped with a notice and only the consent flows run.
+# Fork pull requests get no secrets (this is `pull_request`, never `pull_request_target`) and never
+# reach the self-hosted Mac.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: "3.44.5"
+
+jobs:
+  native-versions:
+    name: Native SDK versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Report-only while the next Android release is pending. Set the repository variable
+      # NATIVE_VERSION_CHECK_STRICT=true to make an outdated pin fail the job.
+      - name: Compare pinned native SDKs with the latest published
+        env:
+          STRICT: ${{ vars.NATIVE_VERSION_CHECK_STRICT || 'false' }}
+        run: |
+          if [ "$STRICT" = "true" ]; then
+            python3 -I scripts/check-native-versions.py
+          else
+            python3 -I scripts/check-native-versions.py --warn-only
+          fi
+
+  android:
+    name: E2E · Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      API_LEVEL: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # The API 35 AVD needs ~7.4 GB; ubuntu-latest leaves about 7.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android/sdk/ndk /opt/ghc /usr/local/.ghcup \
+            /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/share/powershell \
+            /usr/share/swift /usr/local/julia* /opt/az /usr/local/share/chromium
+          df -h /
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install Maestro
+        run: |
+          curl -Ls https://get.maestro.mobile.dev | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Secrets check
+        env:
+          HAS_KEY: ${{ secrets.LINKTRAIL_KEY != '' }}
+          HAS_E2E_TOKEN: ${{ secrets.E2E_TOKEN != '' }}
+        run: |
+          [ "$HAS_KEY" = true ] || echo "::notice title=e2e::LINKTRAIL_KEY not available (fork PR or not configured): real flows will be skipped"
+          [ "$HAS_E2E_TOKEN" = true ] || echo "::notice title=e2e::E2E_TOKEN not available: the backend install check will be skipped"
+
+      - name: AVD cache
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ env.API_LEVEL }}-google_apis-x86_64-v1
+
+      - name: Create AVD snapshot
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.API_LEVEL }}
+          target: google_apis
+          arch: x86_64
+          cores: 4
+          ram-size: 4096M
+          disk-size: 6000M
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-boot-timeout: 900
+          script: echo "AVD snapshot generated."
+
+      - name: Maestro smoke flows
+        timeout-minutes: 40
+        env:
+          LINKTRAIL_KEY: ${{ secrets.LINKTRAIL_KEY }}
+          E2E_TOKEN: ${{ secrets.E2E_TOKEN }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.API_LEVEL }}
+          target: google_apis
+          arch: x86_64
+          cores: 4
+          ram-size: 4096M
+          disk-size: 6000M
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot-save -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          emulator-boot-timeout: 900
+          script: |
+            sleep 30
+            bash e2e/run.sh android
+
+      - name: Upload Maestro debug output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-android
+          path: ~/.maestro/tests/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  ios:
+    name: E2E · iOS
+    # Self-hosted runners must never run fork code: same-repo PRs and manual runs only.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Secrets check
+        env:
+          HAS_KEY: ${{ secrets.LINKTRAIL_KEY != '' }}
+          HAS_E2E_TOKEN: ${{ secrets.E2E_TOKEN != '' }}
+        run: |
+          [ "$HAS_KEY" = true ] || echo "::notice title=e2e::LINKTRAIL_KEY not configured: real flows will be skipped"
+          [ "$HAS_E2E_TOKEN" = true ] || echo "::notice title=e2e::E2E_TOKEN not configured: the backend install check will be skipped"
+
+      # The Mac's runners share one simulator set; the lock (shared with the iOS SDK's e2e) lets only
+      # one e2e job touch simulators at a time, and waiting jobs queue instead of being cancelled.
+      - name: Acquire the simulator lock
+        run: |
+          set -euo pipefail
+          pid="$(bash e2e/sim-lock.sh acquire)"
+          echo "E2E_LOCK_PID=$pid" >> "$GITHUB_ENV"
+
+      - name: Boot a simulator
+        run: |
+          set -euo pipefail
+          xcrun simctl shutdown all || true
+          udid="$(xcrun simctl list devices available | grep 'iPhone ' | grep -oiE '[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}' | head -1)"
+          [ -n "$udid" ] || { echo "::error::no available iPhone simulator"; exit 1; }
+          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid" -b
+          echo "DEVICE=$udid" >> "$GITHUB_ENV"
+
+      - name: Maestro smoke flows
+        timeout-minutes: 60
+        env:
+          LINKTRAIL_KEY: ${{ secrets.LINKTRAIL_KEY }}
+          E2E_TOKEN: ${{ secrets.E2E_TOKEN }}
+        run: bash e2e/run.sh ios
+
+      - name: Shut down the simulator
+        if: always()
+        run: |
+          if [ -n "${DEVICE:-}" ]; then xcrun simctl shutdown "$DEVICE" || true; fi
+
+      - name: Release the simulator lock
+        if: always()
+        run: bash e2e/sim-lock.sh release "${E2E_LOCK_PID:-}"
+
+      - name: Upload Maestro debug output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-ios
+          path: ~/.maestro/tests/
+          retention-days: 7
+          if-no-files-found: ignore

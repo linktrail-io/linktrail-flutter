@@ -110,17 +110,9 @@ class _KickFlipDemoAppState extends State<KickFlipDemoApp> {
       context,
       onToken: (token) async {
         await _consentStore.save(Consent.granted);
-<<<<<<< HEAD
         _e2e.recordConsent(Consent.granted.name);
-        try {
-          await LinkTrail.trackInstallWithClickToken(token);
-          setState(() => _status = 'Consent granted · install tracked (token)');
-        } on LinkTrailException catch (e) {
-          setState(() => _status = 'Token install failed · $e');
-        }
-=======
+        // 0.1.0: the paste button already sent the install with the token.
         setState(() => _status = 'Consent granted · install sent (token)');
->>>>>>> origin/main
       },
     );
     if (decision == null) return; // skipped, or iOS paste already handled in onToken

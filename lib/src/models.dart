@@ -61,6 +61,7 @@ class LinkTrailOptions {
     this.retryPolicy = const LinkTrailRetryPolicy(),
     this.linkDomains = const [],
     this.autoTrackInstall = true,
+    this.autoHandleLinks = true,
     this.requireConsent = true,
     this.clickTokenSource = LinkTrailClickTokenSource.pasteButton,
   });
@@ -85,6 +86,16 @@ class LinkTrailOptions {
   /// [LinkTrailPasteButton] so the install waits for the token tap.
   final bool autoTrackInstall;
 
+  /// Whether the plugin captures incoming links itself (default `true`): the
+  /// link that launched the app (Android launch `Intent`, iOS open-URL /
+  /// Universal Link / scene connection options; held until [LinkTrail.configure]
+  /// on a cold start) and every later one (`onNewIntent`, iOS app and scene
+  /// delegates), each passed to the native `handleDeepLink`. Set `false` to
+  /// route links yourself with [LinkTrail.handleDeepLink] or
+  /// [LinkTrail.resolveDeepLink]. Deferred (first-launch) links reach
+  /// [LinkTrail.onLink] either way.
+  final bool autoHandleLinks;
+
   /// Deny-by-default consent gating (GDPR / ePrivacy). When `true` (the
   /// default), the SDK holds the install and drops events until
   /// [LinkTrail.setConsent] `true` is called. Deep links still route without
@@ -102,6 +113,7 @@ class LinkTrailOptions {
     'retryPolicy': retryPolicy.toMap(),
     'linkDomains': linkDomains,
     'autoTrackInstall': autoTrackInstall,
+    'autoHandleLinks': autoHandleLinks,
     'requireConsent': requireConsent,
     'clickTokenSource': clickTokenSource.name,
   };

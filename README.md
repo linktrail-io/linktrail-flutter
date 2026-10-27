@@ -18,7 +18,7 @@ or add it to your app's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  linktrail_flutter: ^0.1.0
+  linktrail_flutter: ^0.1.1
 ```
 
 Then `flutter pub get`. The native SDKs are pulled in automatically — no manual Gradle or CocoaPods
@@ -76,7 +76,8 @@ LinkTrail.onAttribution;  // Stream<LinkTrailAttribution>
 LinkTrail.onError;        // Stream<LinkTrailException>
 
 // Actions
-await LinkTrail.handleDeepLink(uri);                       // resolve a link manually (also auto-captured)
+await LinkTrail.handleDeepLink(uri);                       // resolve a link manually (also auto-captured) -> bool
+await LinkTrail.resolveDeepLink(uri);                      // same, returns LinkTrailDeepLink? (null = not a LinkTrail URL)
 await LinkTrail.trackInstall(force: false);                // called automatically by configure()
 await LinkTrail.trackEvent(name: 'purchase', value: 9.99, currency: 'USD');
 
@@ -89,6 +90,16 @@ await LinkTrail.requestTrackingAuthorization();            // App Tracking Trans
 await LinkTrail.registerForSKAdAttribution();
 await LinkTrail.updateConversionValue(3, coarseValue: LinkTrailCoarseConversionValue.medium);
 ```
+
+`onLink` never misses a link delivered before you listen: the native callback is registered when
+the first listener subscribes (a deferred link stays saved natively until then), and links that
+arrive while nobody listens are held (up to 10, this process only) and delivered once, in order, to
+the next listener. `onAttribution` replays the latest result to its first listener.
+
+Incoming links are captured for you (`LinkTrailOptions.autoHandleLinks`, default `true`): the launch
+link (held until `configure` on a cold start) and every later one, on Android (`Intent`) and iOS
+(app and scene delegates), go to the native `handleDeepLink`. Set it to `false` to route links
+yourself with `handleDeepLink` / `resolveDeepLink`.
 
 Errors from the native SDKs arrive as typed `LinkTrailException` subtypes on `onError`, and are
 thrown from the `Future`-returning calls — so you can `try/catch` a specific case:
@@ -226,6 +237,13 @@ iOS 26 (`FlutterSceneDelegate`) as well as the classic app-delegate lifecycle.
 
 Custom link domains must be listed in `linkDomains`; `handleDeepLink` ignores non-LinkTrail URLs.
 Links on `*.linktrail.io` need no entry.
+
+## Error codes
+
+Every `LinkTrailException` has a camelCase `code` matching the native error case, and its `message`
+is the native SDK's message, unchanged: `missingApiKey`, `invalidApiKey`, `notConfigured`,
+`invalidUrl`, `notALinkTrailUrl`, `transport`, `server`, `decoding`, `emptyResponse`,
+`invalidArgument`. `LinkTrailServerException` also has `statusCode` and `body`.
 
 ## Upgrading to 0.1.0
 

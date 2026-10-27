@@ -45,6 +45,10 @@ abstract class LinktrailFlutterPlatform extends PlatformInterface {
     throw UnimplementedError('handleDeepLink() has not been implemented.');
   }
 
+  Future<LinkTrailDeepLink?> resolveDeepLink(Uri url) {
+    throw UnimplementedError('resolveDeepLink() has not been implemented.');
+  }
+
   Future<LinkTrailAttribution> trackInstall({required bool force}) {
     throw UnimplementedError('trackInstall() has not been implemented.');
   }

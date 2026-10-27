@@ -86,7 +86,7 @@ await LinkTrail.lastAttribution;
 await LinkTrail.lastDeepLink;
 
 // iOS-only (no-ops on Android)
-await LinkTrail.requestTrackingAuthorization();            // App Tracking Transparency
+await LinkTrail.requestTrackingAuthorization();            // App Tracking Transparency; resolves true on Android
 await LinkTrail.registerForSKAdAttribution();
 await LinkTrail.updateConversionValue(3, coarseValue: LinkTrailCoarseConversionValue.medium);
 ```
@@ -100,6 +100,10 @@ Incoming links are captured for you (`LinkTrailOptions.autoHandleLinks`, default
 link (held until `configure` on a cold start) and every later one, on Android (`Intent`) and iOS
 (app and scene delegates), go to the native `handleDeepLink`. Set it to `false` to route links
 yourself with `handleDeepLink` / `resolveDeepLink`.
+
+`requestTrackingAuthorization()` is not applicable on Android: Android has no OS tracking-permission
+gate, so it resolves `true` (tracking is not platform-restricted). It does not replace your own consent
+flow — use `setConsent` for that on both platforms.
 
 Errors from the native SDKs arrive as typed `LinkTrailException` subtypes on `onError`, and are
 thrown from the `Future`-returning calls — so you can `try/catch` a specific case:

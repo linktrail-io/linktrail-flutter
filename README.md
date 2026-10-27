@@ -281,3 +281,7 @@ Supply your key at build time so it never lands in source control. See
 
 MIT — see [LICENSE](LICENSE). Note the plugin is open source, but the LinkTrail service it talks to
 requires a workspace API key.
+
+## Releasing
+
+Releases are published to pub.dev automatically when a `vX.Y.Z` tag is pushed. See [RELEASING.md](RELEASING.md).

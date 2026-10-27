@@ -90,6 +90,15 @@ void main() {
       expect(calls[1].arguments, {'value': 5, 'coarseValue': 'high'});
       expect(calls[2].arguments, {'value': 2, 'coarseValue': null});
     });
+
+    test('configure forwards linkDomains and the plugin version', () async {
+      await platform.configure(
+        apiKey: 'lt_live_test',
+        options: const LinkTrailOptions(linkDomains: ['go.acme.com']),
+      );
+      expect(calls.single.arguments['options']['linkDomains'], ['go.acme.com']);
+      expect(calls.single.arguments['sdkVersion'], linkTrailFlutterVersion);
+    });
   });
 
   group('result decoding', () {

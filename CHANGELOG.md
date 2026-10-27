@@ -9,6 +9,47 @@
 - Tests: real `MethodChannel`/`EventChannel` tests (argument encoding, result decoding, error
   mapping, deep-link/attribution/error event streams) in addition to the mock-platform tests.
 
+## 0.1.1
+
+Parity release with the React Native wrapper (still wraps the native 0.1.0 SDKs).
+
+- **`onLink` / `onAttribution` never lose an early delivery.** The native callbacks are registered
+  only once Dart first listens, so a deferred link stays saved natively until a listener exists.
+  Links that arrive while no listener is attached are held (up to 10, oldest dropped, this process
+  only) and delivered once, in order, to the next listener; the latest attribution is replayed.
+- New `LinkTrail.resolveDeepLink(Uri)` returns the resolved `LinkTrailDeepLink`, or `null` for a
+  non-LinkTrail URL. `handleDeepLink` still returns `bool`.
+- New `LinkTrailOptions.autoHandleLinks` (default `true`, the existing behaviour): set `false` to
+  stop the plugin capturing launch and incoming links.
+- **Changed: errors carry the native message.** Every `LinkTrailException` has a camelCase `code`
+  and the native SDK's own `message` instead of a wrapper-written one. New
+  `LinkTrailNotConfiguredException` and `LinkTrailInvalidArgumentException` (previously
+  `LinkTrailUnknownException`). `LinkTrailServerException` keeps `statusCode` and `body`. The
+  subtype constructors now take the message (only matters if you construct them yourself).
+- iOS SPM dependency pinned to `.upToNextMinor(from: "0.1.0")`, matching the podspec's `~> 0.1.0`.
+
+## 0.1.0
+
+Wraps the native 0.1.0 SDKs: iOS `LinkTrailSDK ~> 0.1.0` (CocoaPods and SPM) and Android
+`io.linktrail:sdk:0.1.0`. Breaking changes; see "Upgrading to 0.1.0" in the README.
+
+- **Breaking: custom link domains must be listed in `linkDomains`; `handleDeepLink` now ignores
+  non-LinkTrail URLs.** Only `https` links on `linktrail.io` (or a subdomain) or a `linkDomains` host
+  are claimed; anything else returns `false` with no request and no `onError`. `linkDomains` is
+  forwarded to both native SDKs.
+- **Breaking: `LinkTrailPasteButton` uses the native paste handling.** The tap records consent and
+  sends the install with the click token itself, so `onToken` is now a side-effect hook (don't call
+  `trackInstallWithClickToken` from it). New `grantsConsent` (`bool?`): `null` (default) grants
+  consent only while it is still undecided, `true` always grants, `false` never touches consent.
+- **`customData`:** nested objects and arrays arrive as compact JSON strings on both platforms
+  (the type stays `Map<String, String>`); decode them with `jsonDecode`.
+- Android requests send `X-LinkTrail-SDK: flutter/<plugin version>`. iOS still reports
+  `ios/<version>`: the published `LinkTrailSDK` 0.1.0 binary doesn't export its wrapper hook yet.
+  New `linkTrailFlutterVersion` constant, kept equal to `pubspec.yaml` by a test.
+- Native behaviour picked up with this bump: `configure` is a safe singleton, `setConsent(false)`
+  always wins, invalid retry options are clamped instead of throwing, SDK state is no longer backed
+  up, rejected (non-retryable) events are dropped instead of queued, and log levels read `WARNING`.
+
 ## 0.0.4
 
 - Bumped the wrapped iOS SDK to `LinkTrailSDK ~> 0.0.12` (Android stays on `io.linktrail:sdk:0.0.5`).

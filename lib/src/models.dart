@@ -61,6 +61,7 @@ class LinkTrailOptions {
     this.retryPolicy = const LinkTrailRetryPolicy(),
     this.linkDomains = const [],
     this.autoTrackInstall = true,
+    this.autoHandleLinks = true,
     this.requireConsent = true,
     this.clickTokenSource = LinkTrailClickTokenSource.pasteButton,
   });
@@ -70,17 +71,30 @@ class LinkTrailOptions {
   final Duration requestTimeout;
   final LinkTrailRetryPolicy retryPolicy;
 
-  /// Universal Link / App Link hosts that belong to this app (e.g.
-  /// `kick.linktrail.io`). When non-empty, **re-engagement** opens (app already
-  /// installed) only route for these hosts — a link on an unlisted host opens
-  /// the app but never navigates. Deferred (install-time) links route
-  /// regardless. Leave empty to handle every parseable link.
+  /// Your **custom** link domains (e.g. `go.acme.com`), forwarded to both
+  /// native SDKs. [LinkTrail.handleDeepLink] and the automatic link capture
+  /// only claim `https` links on `linktrail.io` (or a subdomain) or on one of
+  /// these hosts (or a subdomain); any other URL (`mailto:`, OAuth callbacks,
+  /// `myapp://settings`) is ignored, makes no network call and does not reach
+  /// [LinkTrail.onError]. Links on `*.linktrail.io` need no entry. Entries are
+  /// normalised natively (scheme, path and port dropped, lowercased); invalid
+  /// ones are ignored with a warning.
   final List<String> linkDomains;
 
   /// Whether [LinkTrail.configure] fires an install/open event automatically.
   /// Set `false` to defer the install — required when using a
   /// [LinkTrailPasteButton] so the install waits for the token tap.
   final bool autoTrackInstall;
+
+  /// Whether the plugin captures incoming links itself (default `true`): the
+  /// link that launched the app (Android launch `Intent`, iOS open-URL /
+  /// Universal Link / scene connection options; held until [LinkTrail.configure]
+  /// on a cold start) and every later one (`onNewIntent`, iOS app and scene
+  /// delegates), each passed to the native `handleDeepLink`. Set `false` to
+  /// route links yourself with [LinkTrail.handleDeepLink] or
+  /// [LinkTrail.resolveDeepLink]. Deferred (first-launch) links reach
+  /// [LinkTrail.onLink] either way.
+  final bool autoHandleLinks;
 
   /// Deny-by-default consent gating (GDPR / ePrivacy). When `true` (the
   /// default), the SDK holds the install and drops events until
@@ -99,6 +113,7 @@ class LinkTrailOptions {
     'retryPolicy': retryPolicy.toMap(),
     'linkDomains': linkDomains,
     'autoTrackInstall': autoTrackInstall,
+    'autoHandleLinks': autoHandleLinks,
     'requireConsent': requireConsent,
     'clickTokenSource': clickTokenSource.name,
   };
@@ -144,6 +159,11 @@ class LinkTrailDeepLink {
   final String? campaign;
   final String? channel;
   final Map<String, String>? utm;
+
+  /// The link's custom key/value data. Every value is a string: a nested
+  /// object or array set on the link arrives as a compact JSON string
+  /// (`{"x":1}`, `["a","b"]`), so decode it with `jsonDecode` when you need
+  /// the structure. On iOS, object keys inside those strings are sorted.
   final Map<String, String>? customData;
 
   /// The path to route on, falling back to `/` when the link carries none.

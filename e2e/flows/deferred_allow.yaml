@@ -17,7 +17,8 @@ tags: [real]
 - runFlow:
     when: { platform: iOS }
     commands:
-      # The native UIPasteControl: the tap is the consent and hands the token to the SDK.
+      # The native UIPasteControl: since 0.1.0 the tap grants consent and the button itself sends
+      # the install with the token (the app's onToken only persists the choice).
       - tapOn: { text: "^Paste$" }
 - extendedWaitUntil: { visible: "onLink count: 1", timeout: 30000 }
 - assertVisible: "consent: granted"

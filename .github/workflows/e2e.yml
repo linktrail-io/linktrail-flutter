@@ -32,11 +32,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Report-only while the next Android release is pending. Set the repository variable
-      # NATIVE_VERSION_CHECK_STRICT=true to make an outdated pin fail the job.
+      # Fails on an outdated pin. Set the repository variable NATIVE_VERSION_CHECK_STRICT=false
+      # to only warn.
       - name: Compare pinned native SDKs with the latest published
         env:
-          STRICT: ${{ vars.NATIVE_VERSION_CHECK_STRICT || 'false' }}
+          STRICT: ${{ vars.NATIVE_VERSION_CHECK_STRICT || 'true' }}
         run: |
           if [ "$STRICT" = "true" ]; then
             python3 -I scripts/check-native-versions.py

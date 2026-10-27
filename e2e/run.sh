@@ -22,9 +22,6 @@
 #   LINK_URL            campaign link (default https://kick.linktrail.io/discounted-product)
 #   BACKEND_URL         default https://backend.linktrail.io
 #   RETRIES             attempts per flow (default 2)
-#   ANDROID_FAKE_REFERRER  auto (default) | 1 | 0. The debug referrer override
-#                       (debug.linktrail.referrer) ships after io.linktrail:sdk 0.0.5; on auto the
-#                       Android deferred flows are skipped while the plugin pins 0.0.5 or older.
 set -euo pipefail
 export PATH="$HOME/.maestro/bin:$PATH"
 
@@ -60,14 +57,6 @@ FLOWS="${*:-$ALL_FLOWS}"
 for f in $FLOWS; do [ -f "$FLOWS_DIR/$f.yaml" ] || { echo "ERROR: no flow e2e/flows/$f.yaml"; exit 2; }; done
 
 is_real() { case "$1" in consent_*) return 1 ;; *) return 0 ;; esac; }
-
-# Which native Android SDK the plugin pins, and whether it has the debug referrer override.
-android_has_fake_referrer() {
-  case "${ANDROID_FAKE_REFERRER:-auto}" in 1) return 0 ;; 0) return 1 ;; esac
-  local v
-  v="$(grep -oE 'io\.linktrail:sdk:[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/android/build.gradle.kts" | head -1 | cut -d: -f3)"
-  python3 -I -c 'import sys; v = tuple(int(x) for x in sys.argv[1].split(".")); sys.exit(0 if v > (0, 0, 5) else 1)' "${v:-0.0.0}"
-}
 
 # ── Build ────────────────────────────────────────────────────────────────────────────────────
 DEFINES="$(mktemp)"; chmod 600 "$DEFINES"
@@ -205,10 +194,6 @@ run_once() {
 FAIL=0; PASSED=""; SKIPPED=""
 for flow in $FLOWS; do
   if is_real "$flow" && [ $HAVE_KEY = 0 ]; then SKIPPED="$SKIPPED $flow"; continue; fi
-  if [ "$PLATFORM" = android ] && [[ "$flow" == deferred_* ]] && ! android_has_fake_referrer; then
-    warn "$flow skipped on Android: the pinned io.linktrail:sdk has no debug referrer override yet (needs > 0.0.5)"
-    SKIPPED="$SKIPPED $flow"; continue
-  fi
   ok=0
   for attempt in $(seq 1 "$RETRIES"); do
     echo "==> $PLATFORM · $flow (attempt $attempt/$RETRIES)"

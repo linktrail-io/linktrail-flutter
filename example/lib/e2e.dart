@@ -62,7 +62,7 @@ class _E2EPanelState extends State<E2EPanel> {
       final result = await LinkTrail.trackEvent(name: 'e2e_purchase', value: 9.99, currency: 'USD');
       widget.state.recordTrackEvent('ok id=${result.id} value=9.99 USD');
     } on LinkTrailException catch (e) {
-      widget.state.recordTrackEvent('error ${e.runtimeType}');
+      widget.state.recordTrackEvent('error ${e.code}');
     }
   }
 

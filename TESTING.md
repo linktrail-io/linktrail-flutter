@@ -26,9 +26,8 @@ How the deferred click is staged:
 
 - **Android:** the script makes a real click with an Android Chrome user agent, takes `lt_click`
   from the Play Store redirect and stages it with the native SDK's debug fake referrer
-  (`adb shell setprop debug.linktrail.referrer "lt_click=<token>"`). The override ships in the
-  native Android SDK after 0.0.5, so while the plugin pins 0.0.5 the Android deferred flows are
-  skipped with a warning (`ANDROID_FAKE_REFERRER=1` forces them).
+  (`adb shell setprop debug.linktrail.referrer "lt_click=<token>"`), available since native
+  Android SDK 0.1.0.
 - **iOS:** `e2e/flows/ios/safari_click.yaml` opens the link in Safari, the interstitial puts the
   token on the clipboard, and the deferred flow taps the native Paste button.
 
@@ -57,8 +56,8 @@ through a private temp file and never prints either secret. The real flows make 
 
 - **Native SDK versions:** `scripts/check-native-versions.py` compares the pinned `LinkTrailSDK`
   (podspec and Package.swift) and `io.linktrail:sdk` with the latest on CocoaPods trunk and Maven
-  Central. It only warns for now; set the repository variable `NATIVE_VERSION_CHECK_STRICT=true`
-  to make an outdated pin fail.
+  Central and fails on an outdated pin (set the repository variable
+  `NATIVE_VERSION_CHECK_STRICT=false` to only warn).
 - **Android:** an API 35 emulator on `ubuntu-latest` with KVM.
 - **iOS:** the self-hosted Mac (`[self-hosted, macOS]`), behind the machine-wide simulator lock
   (`e2e/sim-lock.sh`, shared with the iOS SDK's e2e). Fork pull requests never run on it.

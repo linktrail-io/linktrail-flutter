@@ -52,7 +52,7 @@ def main():
     problems = []
     checks = [
         ("iOS podspec LinkTrailSDK", pin("ios/linktrail_flutter.podspec", r"dependency\s+'LinkTrailSDK',\s*'[~>=\s]*([\d.]+)'"), latest_pod),
-        ("iOS Package.swift ios-sdk", pin("ios/linktrail_flutter/Package.swift", r"ios-sdk\.git\",\s*from:\s*\"([\d.]+)\""), latest_pod),
+        ("iOS Package.swift ios-sdk", pin("ios/linktrail_flutter/Package.swift", r"ios-sdk\.git\",\s*(?:\.\w+\()?from:\s*\"([\d.]+)\""), latest_pod),
         ("Android io.linktrail:sdk", pin("android/build.gradle.kts", r"io\.linktrail:sdk:([\d.]+)"), latest_maven),
     ]
     cache = {}

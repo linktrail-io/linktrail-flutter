@@ -9,11 +9,11 @@ Closes #
 ## Production impact
 | | |
 |---|---|
-| Breaking change (API, SDK or behaviour) | Yes / No |
-| Database migration | Yes / No |
-| Index added or changed | Yes / No |
-| New env var, secret or config | Yes / No |
-| Safe to roll back | Yes / No |
+| Breaking public API change | Yes / No |
+| Behaviour change for integrators | Yes / No |
+| Min OS / SDK / platform version change | Yes / No |
+| Permissions or privacy manifest change | Yes / No |
+| Version and CHANGELOG updated | Yes / No |
 | Risk | Low / Medium / High |
 
 <!-- If anything is "Yes", say what someone must do before or after deploy. -->
@@ -24,6 +24,7 @@ Closes #
 | Tests added or updated for all new and changed code | Yes / No |
 | Unit tests pass locally | Yes / No |
 | CI green | Yes / No |
+| Example app / e2e run | Yes / No |
 
 <!-- If any is "No", explain why. -->
 

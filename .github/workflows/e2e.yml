@@ -147,12 +147,18 @@ jobs:
 
   ios:
     name: E2E · iOS
-    # Self-hosted runners must never run fork code: same-repo PRs and manual runs only.
+    # GitHub-hosted macOS: free and unlimited on this public repo. Same-repo PRs and
+    # manual runs only, because the job uses the repo's e2e secrets.
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, macOS]
+    runs-on: macos-latest
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Maestro
+        run: |
+          curl -Ls https://get.maestro.mobile.dev | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
       - uses: subosito/flutter-action@v2
         with:

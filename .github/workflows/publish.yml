@@ -14,7 +14,10 @@ env:
 jobs:
   publish:
     name: Publish
-    runs-on: ubuntu-latest
+    # Public repo: fork pull_request runs never reach the self-hosted Macs (fork-PR approval is on too).
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+    # Every job runs on the org's self-hosted Mac minis (no GitHub-hosted minutes).
+    runs-on: [self-hosted, macOS]
     # Optional: add `environment: pub.dev` here if pub.dev is set to require that GitHub environment.
     permissions:
       id-token: write # pub.dev OIDC authentication
@@ -29,6 +32,8 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
+          # Per job, not the shared ~/.pub-cache of the Mac.
+          pub-cache-path: ${{ runner.temp }}/pub-cache
 
       - name: Check tag matches pubspec version and CHANGELOG
         env:

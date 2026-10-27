@@ -19,7 +19,10 @@ env:
 jobs:
   analyze-test-android:
     name: Analyze · test · Android build
-    runs-on: ubuntu-latest
+    # Public repo: fork pull_request runs never reach the self-hosted Macs (fork-PR approval is on too).
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+    # Every job runs on the org's self-hosted Mac minis (no GitHub-hosted minutes).
+    runs-on: [self-hosted, macOS]
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +36,8 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
+          # Per job, not the shared ~/.pub-cache of the Mac (restored from the Actions cache).
+          pub-cache-path: ${{ runner.temp }}/pub-cache
 
       - run: flutter --version
 
@@ -50,13 +55,20 @@ jobs:
       - name: Publish dry-run
         run: flutter pub publish --dry-run
 
+      # The SDK packages the example's Android build needs (Flutter 3.44 defaults: compileSdk 36,
+      # NDK 28.2; AGP 9.0's build-tools 36), reused when present. The hosted image had them.
+      - name: Android SDK
+        run: bash scripts/ci/android-sdk.sh platform-tools "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358"
+
       - name: Build example (Android APK, debug)
         working-directory: example
         run: flutter build apk --debug
 
   ios-build:
     name: iOS build (no codesign)
-    runs-on: macos-latest
+    # Public repo: fork pull_request runs never reach the self-hosted Macs (fork-PR approval is on too).
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+    runs-on: [self-hosted, macOS]
     steps:
       - uses: actions/checkout@v4
 
@@ -65,11 +77,21 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
+          # Per job, not the shared ~/.pub-cache of the Mac (restored from the Actions cache).
+          pub-cache-path: ${{ runner.temp }}/pub-cache
 
       - run: flutter --version
 
       - name: Install dependencies
         run: flutter pub get
+
+      # `flutter build ios` runs `pod install`: a pinned CocoaPods for this job only (scripts/ci/cocoapods.sh).
+      - name: Set up CocoaPods
+        env:
+          COCOAPODS_VERSION: 1.16.2
+          LANG: en_US.UTF-8
+          LC_ALL: en_US.UTF-8
+        run: bash scripts/ci/cocoapods.sh
 
       # LANG/LC_ALL avoid the CocoaPods "ASCII-8BIT" Ruby locale crash. `flutter build ios` runs
       # `pod install` internally; if the CocoaPods CDN lags right after a new LinkTrailSDK release,

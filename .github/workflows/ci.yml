@@ -24,10 +24,7 @@ jobs:
   # workflow_dispatch and workflow_call always run in full. So does anything unexpected (git
   # error, empty diff, this job failing). The patterns live in scripts/docs-only-changes.sh.
   changes:
-    # Public repo: fork pull_request runs never reach the self-hosted Macs.
-    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
-    # Self-hosted Mac minis, like every job in the org (no GitHub-hosted minutes).
-    runs-on: [self-hosted, macOS]
+    runs-on: ubuntu-latest
     outputs:
       docs_only: ${{ steps.decide.outputs.docs_only }}
     steps:

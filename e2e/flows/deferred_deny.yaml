@@ -1,0 +1,12 @@
+# Deferred link · consent deny (REAL). Same staging as deferred_allow.yaml. Deny never sends the
+# install, so no deferred link is delivered; run.sh then asks the backend: not recorded, 0 installs.
+appId: ${APP_ID}
+tags: [real]
+---
+- launchApp: { clearState: true }
+- extendedWaitUntil: { visible: "Help us attribute your visit", timeout: 60000 }
+- tapOn: "Deny"
+- tapOn: "Continue"
+- extendedWaitUntil: { visible: "consent: denied", timeout: 15000 }
+- waitForAnimationToEnd: { timeout: 5000 }
+- assertVisible: "onLink count: 0"

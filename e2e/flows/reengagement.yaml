@@ -1,0 +1,27 @@
+# Re-engagement link (REAL): the app is installed and consented, then a campaign link arrives.
+#   Android: a real https App Link (run.sh approves the host for the app first).
+#   iOS:     the link goes through LinkTrail.handleDeepLink from the E2E panel. An unsigned simulator
+#            build drops the associated-domains entitlement, so iOS would open the https link in Safari.
+# Either way the SDK resolves it and onLink must fire once with source reengagement.
+appId: ${APP_ID}
+tags: [real]
+---
+- launchApp: { clearState: true }
+- extendedWaitUntil: { visible: "Help us attribute your visit", timeout: 60000 }
+- tapOn: "Allow tracking"
+- tapOn: "Continue"
+- extendedWaitUntil: { visible: "consent: granted", timeout: 15000 }
+- runFlow:
+    when: { platform: Android }
+    commands:
+      - openLink: ${LINK_URL}
+- runFlow:
+    when: { platform: iOS }
+    commands:
+      - tapOn: { id: "e2e-link-input" }
+      - inputText: ${LINK_URL}
+      - tapOn: { id: "e2e-handle-link" }
+- extendedWaitUntil: { visible: "onLink count: 1", timeout: 30000 }
+- assertVisible: "source: reengagement"
+- assertVisible: "path: /products/aj1"
+- assertVisible: { text: "customData: .*voucher=SUMMER25.*" }

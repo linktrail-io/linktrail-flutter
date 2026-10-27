@@ -30,6 +30,9 @@ class MockLinktrailFlutterPlatform with MockPlatformInterfaceMixin implements Li
   Future<bool> handleDeepLink(Uri url) => Future.value(true);
 
   @override
+  Future<LinkTrailDeepLink?> resolveDeepLink(Uri url) => Future.value(null);
+
+  @override
   Future<LinkTrailAttribution> trackInstall({required bool force}) {
     return Future.value(const LinkTrailAttribution(attributed: true));
   }

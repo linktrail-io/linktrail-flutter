@@ -18,7 +18,7 @@ or add it to your app's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  linktrail_flutter: ^0.0.4
+  linktrail_flutter: ^0.1.1
 ```
 
 Then `flutter pub get`. The native SDKs are pulled in automatically — no manual Gradle or CocoaPods
@@ -76,7 +76,8 @@ LinkTrail.onAttribution;  // Stream<LinkTrailAttribution>
 LinkTrail.onError;        // Stream<LinkTrailException>
 
 // Actions
-await LinkTrail.handleDeepLink(uri);                       // resolve a link manually (also auto-captured)
+await LinkTrail.handleDeepLink(uri);                       // resolve a link manually (also auto-captured) -> bool
+await LinkTrail.resolveDeepLink(uri);                      // same, returns LinkTrailDeepLink? (null = not a LinkTrail URL)
 await LinkTrail.trackInstall(force: false);                // called automatically by configure()
 await LinkTrail.trackEvent(name: 'purchase', value: 9.99, currency: 'USD');
 
@@ -89,6 +90,16 @@ await LinkTrail.requestTrackingAuthorization();            // App Tracking Trans
 await LinkTrail.registerForSKAdAttribution();
 await LinkTrail.updateConversionValue(3, coarseValue: LinkTrailCoarseConversionValue.medium);
 ```
+
+`onLink` never misses a link delivered before you listen: the native callback is registered when
+the first listener subscribes (a deferred link stays saved natively until then), and links that
+arrive while nobody listens are held (up to 10, this process only) and delivered once, in order, to
+the next listener. `onAttribution` replays the latest result to its first listener.
+
+Incoming links are captured for you (`LinkTrailOptions.autoHandleLinks`, default `true`): the launch
+link (held until `configure` on a cold start) and every later one, on Android (`Intent`) and iOS
+(app and scene delegates), go to the native `handleDeepLink`. Set it to `false` to route links
+yourself with `handleDeepLink` / `resolveDeepLink`.
 
 Errors from the native SDKs arrive as typed `LinkTrailException` subtypes on `onError`, and are
 thrown from the `Future`-returning calls — so you can `try/catch` a specific case:
@@ -123,13 +134,26 @@ if (consent == 'denied') await LinkTrail.setConsent(false);
 
 Set `requireConsent: false` to opt out of gating and track automatically (the pre-consent behavior).
 
-## `linkDomains` — re-engagement host gating
+## `linkDomains` — custom link domains
 
-When `linkDomains` is **non-empty**, the SDK routes **re-engagement** opens (app already installed)
-*only* for those hosts — a link on an unlisted host **opens the app but never navigates**.
-**Deferred** (install-time) links skip this check and route regardless. Net effect: a missing host
-looks fine on a fresh install yet silently fails once installed. Leave `linkDomains` empty to handle
-every parseable link.
+The SDK only claims `https` links on `linktrail.io` (or a subdomain) and on the hosts you list in
+`LinkTrailOptions.linkDomains` (or their subdomains). If your links use your own domain, list it:
+
+```dart
+await LinkTrail.configure(
+  apiKey: 'lt_live_…',
+  options: const LinkTrailOptions(linkDomains: ['go.acme.com']),
+);
+```
+
+Any other URL (`mailto:`, OAuth callbacks, `myapp://settings`) is ignored: `handleDeepLink`
+returns `false`, no request is made and `onError` does not fire, so route those yourself.
+
+## `customData` values
+
+`LinkTrailDeepLink.customData` is a `Map<String, String>`. A nested object or array set on the link
+arrives as a compact JSON string (`{"x":1}`, `["a","b"]`) on both platforms; decode it with
+`jsonDecode` when you need the structure.
 
 ## Deferred attribution & the paste button (iOS)
 
@@ -144,12 +168,17 @@ On iOS, deferred attribution recovers a **click token** the tapped link leaves o
 
 ```dart
 LinkTrailPasteButton(
-  width: 240,
-  onToken: (token) async {
-    await LinkTrail.trackInstallWithClickToken(token);
+  // null (default): the tap grants consent only while it is still undecided.
+  // true: always grants, even after a denial. false: never touches consent.
+  grantsConsent: null,
+  onToken: (token) {
+    // The SDK has already sent the install with the token; advance your UI here.
   },
 )
 ```
+
+The tap records consent per `grantsConsent` and sends the install with the click token itself, so
+don't also call `trackInstallWithClickToken` from `onToken`.
 
 The widget renders the native control on iOS 16+ and **nothing on Android** (Play Install Referrer
 handles deferred attribution there, so `clickTokenSource` and the paste button are ignored). Apple
@@ -204,13 +233,36 @@ Add the **Associated Domains** capability with `applinks:kick.linktrail.io`, and
 On iOS 13+ the plugin registers on the **UIScene lifecycle**, so links are delivered correctly on
 iOS 26 (`FlutterSceneDelegate`) as well as the classic app-delegate lifecycle.
 
-### List every link host in `linkDomains`
+### List every custom link host in `linkDomains`
 
-When `linkDomains` is non-empty, the SDK routes re-engagement opens (app already installed) *only*
-for those hosts — a link on an unlisted host opens the app but never navigates. Deferred
-(install-time) links skip this check and route regardless, so a missing host can look fine on a
-fresh install yet fail once the app is installed. Leave `linkDomains` empty (the default) to handle
-every parseable link.
+Custom link domains must be listed in `linkDomains`; `handleDeepLink` ignores non-LinkTrail URLs.
+Links on `*.linktrail.io` need no entry.
+
+## Error codes
+
+Every `LinkTrailException` has a camelCase `code` matching the native error case, and its `message`
+is the native SDK's message, unchanged: `missingApiKey`, `invalidApiKey`, `notConfigured`,
+`invalidUrl`, `notALinkTrailUrl`, `transport`, `server`, `decoding`, `emptyResponse`,
+`invalidArgument`. `LinkTrailServerException` also has `statusCode` and `body`.
+
+## Upgrading to 0.1.0
+
+0.1.0 wraps the native 0.1.0 SDKs (iOS `LinkTrailSDK` 0.1.0, Android `io.linktrail:sdk` 0.1.0),
+which have breaking changes:
+
+- **Custom link domains must be listed in `linkDomains`; `handleDeepLink` now ignores non-LinkTrail
+  URLs.** Only `https` links on `linktrail.io` or a `linkDomains` host are claimed. Custom-scheme
+  LinkTrail links (`myapp://slug`) are no longer handled; use the `https` link.
+- **`LinkTrailPasteButton` handles the install and consent itself.** New `grantsConsent` (`bool?`,
+  default `null` = grant only while undecided). Remove any `trackInstallWithClickToken` call from
+  `onToken`. Pass `grantsConsent: true` for the old "the tap always grants" behaviour.
+- **Nested `customData` values arrive as JSON strings** (see above).
+- **`setConsent(false)` wins even with `requireConsent: false`**, and SDK state is no longer backed
+  up, so a restored or migrated device asks for consent again.
+- Android requests now send `X-LinkTrail-SDK: flutter/<plugin version>` (iOS still reports
+  `ios/<version>` until the native SDK exports its wrapper hook).
+
+See the native changelogs for the full list.
 
 ## Example app
 
@@ -229,3 +281,7 @@ Supply your key at build time so it never lands in source control. See
 
 MIT — see [LICENSE](LICENSE). Note the plugin is open source, but the LinkTrail service it talks to
 requires a workspace API key.
+
+## Releasing
+
+Releases are published to pub.dev automatically when a `vX.Y.Z` tag is pushed. See [RELEASING.md](RELEASING.md).

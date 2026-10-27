@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:linktrail_flutter/linktrail_flutter_method_channel.dart';
 import 'package:linktrail_flutter/src/models.dart';
+import 'package:linktrail_flutter/src/version.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +38,16 @@ void main() {
     expect(calls.single.method, 'configure');
     expect(calls.single.arguments['apiKey'], 'lt_live_test');
     expect(calls.single.arguments['options'], isA<Map>());
+  });
+
+  test('configure forwards linkDomains and the plugin version', () async {
+    await platform.configure(
+      apiKey: 'lt_live_test',
+      options: const LinkTrailOptions(linkDomains: ['go.acme.com']),
+    );
+
+    expect(calls.single.arguments['options']['linkDomains'], ['go.acme.com']);
+    expect(calls.single.arguments['sdkVersion'], linkTrailFlutterVersion);
   });
 
   test('trackEvent decodes the returned map', () async {

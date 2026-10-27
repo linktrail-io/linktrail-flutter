@@ -1,11 +1,18 @@
 import Flutter
 import LinkTrailSDK
+import SwiftUI
 import UIKit
 
 /// Flutter plugin wrapping the native `LinkTrailSDK` iOS SDK.
 public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate {
-  fileprivate var onLinkSink: FlutterEventSink?
-  fileprivate var onAttributionSink: FlutterEventSink?
+  // Links and attribution go through buffers so nothing native delivers before (or between) Dart
+  // listeners is lost. The native onLink/onAttribution callbacks are registered only once Dart first
+  // listens: native keeps an unclaimed deferred link persisted until then.
+  fileprivate let linkRelay = EventRelay<[String: Any?]>()
+  fileprivate let attributionRelay = EventRelay<[String: Any?]>(keepLastOnly: true)
+  fileprivate var linkHookWanted = false
+  fileprivate var attributionHookWanted = false
+  private var autoHandleLinks = true
   fileprivate var onErrorSink: FlutterEventSink?
 
   /// On a cold launch the open-URL / Universal-Link callbacks can fire before Dart has called
@@ -43,11 +50,15 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
   /// (Re)registers the native callback hooks on the current `LinkTrail.shared` instance.
   fileprivate func attachHooks() {
     guard let sdk = LinkTrail.shared else { return }
-    sdk.onLink { [weak self] link, source in
-      self?.onLinkSink?(["link": link.toMap(), "source": source.dartName])
+    if linkHookWanted {
+      sdk.onLink { [weak self] link, source in
+        self?.linkRelay.send(["link": link.toMap(), "source": source.dartName])
+      }
     }
-    sdk.onAttribution { [weak self] attribution in
-      self?.onAttributionSink?(attribution.toMap())
+    if attributionHookWanted {
+      sdk.onAttribution { [weak self] attribution in
+        self?.attributionRelay.send(attribution.toMap())
+      }
     }
     sdk.onError { [weak self] error in
       self?.onErrorSink?(toErrorMap(error))
@@ -63,13 +74,18 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
         result(FlutterError(code: "missingApiKey", message: "An API key is required to configure LinkTrail.", details: nil))
         return
       }
+      // `args["sdkVersion"]` carries the plugin version for `X-LinkTrail-SDK: flutter/<version>`.
+      // Not forwarded yet: the published LinkTrailSDK 0.1.0 binary does not export its
+      // `@_spi(Wrapper) setSDKIdentifier` hook, so iOS requests still report `ios/<version>`.
+      let optionsMap = args?["options"] as? [String: Any]
+      autoHandleLinks = optionsMap?["autoHandleLinks"] as? Bool ?? true
       do {
-        _ = try LinkTrail.configure(apiKey: apiKey, options: Self.parseOptions(args?["options"] as? [String: Any]))
+        _ = try LinkTrail.configure(apiKey: apiKey, options: Self.parseOptions(optionsMap))
         attachHooks()
         // Replay a link that launched the app cold, before the SDK was configured.
         if let url = pendingLaunchURL {
           pendingLaunchURL = nil
-          LinkTrail.shared?.handleDeepLink(url)
+          if autoHandleLinks { LinkTrail.shared?.handleDeepLink(url) }
         }
         result(nil)
       } catch {
@@ -82,6 +98,26 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
         return
       }
       result(sdk.handleDeepLink(url))
+
+    case "resolveDeepLink":
+      guard let urlString = args?["url"] as? String, let url = URL(string: urlString) else {
+        result(FlutterError(code: "invalidArgument", message: "resolveDeepLink requires a valid url.", details: nil))
+        return
+      }
+      guard let sdk = LinkTrail.shared else {
+        result(FlutterError.notConfigured)
+        return
+      }
+      Task {
+        do {
+          let link: LinkTrailDeepLink = try await sdk.handleDeepLink(url)
+          result(link.toMap())
+        } catch LinkTrailError.notALinkTrailURL {
+          result(nil)
+        } catch {
+          result(toFlutterError(error))
+        }
+      }
 
     case "trackInstall":
       guard let sdk = LinkTrail.shared else {
@@ -256,6 +292,7 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
   /// Handle the URL now if the SDK is configured, otherwise buffer it for replay after configure().
   @discardableResult
   private func handleOrBufferLaunchURL(_ url: URL) -> Bool {
+    guard autoHandleLinks else { return false }
     if let sdk = LinkTrail.shared {
       return sdk.handleDeepLink(url)
     }
@@ -269,13 +306,14 @@ private final class LinkStreamHandler: NSObject, FlutterStreamHandler {
   init(plugin: LinktrailFlutterPlugin) { self.plugin = plugin }
 
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
-    plugin?.onLinkSink = events
+    plugin?.linkHookWanted = true
+    plugin?.linkRelay.attach { events($0) }
     plugin?.attachHooks()
     return nil
   }
 
   func onCancel(withArguments arguments: Any?) -> FlutterError? {
-    plugin?.onLinkSink = nil
+    plugin?.linkRelay.detach()
     return nil
   }
 }
@@ -285,13 +323,14 @@ private final class AttributionStreamHandler: NSObject, FlutterStreamHandler {
   init(plugin: LinktrailFlutterPlugin) { self.plugin = plugin }
 
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
-    plugin?.onAttributionSink = events
+    plugin?.attributionHookWanted = true
+    plugin?.attributionRelay.attach { events($0) }
     plugin?.attachHooks()
     return nil
   }
 
   func onCancel(withArguments arguments: Any?) -> FlutterError? {
-    plugin?.onAttributionSink = nil
+    plugin?.attributionRelay.detach()
     return nil
   }
 }
@@ -389,9 +428,9 @@ private func toFlutterError(_ error: Error) -> FlutterError {
   let (code, details): (String, [String: Any?]) =
     switch error {
     case LinkTrailError.invalidURL(let url): ("invalidUrl", ["url": url])
-    case LinkTrailError.transport(let message): ("transport", ["message": message])
+    case LinkTrailError.transport(let message): ("transport", ["detail": message])
     case LinkTrailError.server(let statusCode, let body): ("server", ["statusCode": statusCode, "body": body])
-    case LinkTrailError.decoding(let message): ("decoding", ["message": message])
+    case LinkTrailError.decoding(let message): ("decoding", ["detail": message])
     case LinkTrailError.emptyResponse: ("emptyResponse", [:])
     case LinkTrailError.notALinkTrailURL: ("notALinkTrailUrl", [:])
     case LinkTrailError.missingAPIKey: ("missingApiKey", [:])
@@ -426,15 +465,18 @@ final class LinkTrailPasteButtonFactory: NSObject, FlutterPlatformViewFactory {
   }
 }
 
-/// Hosts Apple's native `UIPasteControl` (iOS 16+) themed to a caller-supplied color, and forwards
-/// the pasted click token back to Dart over a per-view method channel. Renders an empty view on
+/// Hosts Apple's native `UIPasteControl` (iOS 16+) themed to a caller-supplied color. The paste
+/// target is the native `LinkTrailPasteButton` coordinator, so the tap gets the SDK's own handling
+/// (`grantsConsent` semantics, then the install with the token); the pasted string is then
+/// forwarded to Dart over a per-view method channel. Renders an empty view on
 /// older iOS. Using `UIPasteControl` (rather than reading the clipboard directly) is what avoids the
 /// system "Allow Paste" alert.
 final class LinkTrailPasteButtonPlatformView: NSObject, FlutterPlatformView {
   private let container: UIView
   private let channel: FlutterMethodChannel
-  // Stored as the base type so this class doesn't inherit LinkTrailPasteReceiver's iOS 16 availability.
-  private var receiver: UIView?
+  // Stored as the base type so this class doesn't inherit the iOS 16 availability. UIPasteControl
+  // holds its target weakly, so the view keeps it alive.
+  private var target: UIResponder?
 
   init(frame: CGRect, viewId: Int64, messenger: FlutterBinaryMessenger, args: Any?) {
     container = UIView(frame: frame)
@@ -452,41 +494,24 @@ final class LinkTrailPasteButtonPlatformView: NSObject, FlutterPlatformView {
       config.baseForegroundColor = .white
       if let fillColor { config.baseBackgroundColor = fillColor }
 
-      let receiver = LinkTrailPasteReceiver()
-      receiver.onToken = { [weak channel] token in channel?.invokeMethod("onToken", arguments: token) }
-      // UIPasteControl only enables when its target declares — via a paste configuration — that it
-      // accepts the clipboard's content type. Without this the button stays disabled/greyed out.
-      receiver.pasteConfiguration = UIPasteConfiguration(acceptableTypeIdentifiers: [
-        "public.utf8-plain-text", "public.plain-text", "public.text", "public.url",
-      ])
+      // nil (the default) = grant consent only while it is still undecided; never `true` by default.
+      let grantsConsent = argMap?["grantsConsent"] as? Bool
+      let coordinator = LinkTrailPasteButton(grantsConsent: grantsConsent) { [weak channel] token in
+        channel?.invokeMethod("onToken", arguments: token)
+      }.makeCoordinator()
+      // The coordinator declares a paste configuration for text, which UIPasteControl needs to enable.
 
       let control = UIPasteControl(configuration: config)
-      control.target = receiver
+      control.target = coordinator
       control.frame = container.bounds
       control.autoresizingMask = [.flexibleWidth, .flexibleHeight]
 
-      container.addSubview(receiver)
       container.addSubview(control)
-      self.receiver = receiver
+      self.target = coordinator
     }
   }
 
   func view() -> UIView { container }
-}
-
-/// The paste target for the `UIPasteControl`. When the user taps the control, the system loads the
-/// clipboard items and calls `paste(itemProviders:)` here — with no "Allow Paste" alert.
-@available(iOS 16.0, *)
-final class LinkTrailPasteReceiver: UIView {
-  var onToken: ((String) -> Void)?
-
-  override func paste(itemProviders: [NSItemProvider]) {
-    guard let provider = itemProviders.first(where: { $0.canLoadObject(ofClass: NSString.self) }) else { return }
-    provider.loadObject(ofClass: NSString.self) { [weak self] object, _ in
-      guard let token = object as? String else { return }
-      DispatchQueue.main.async { self?.onToken?(token) }
-    }
-  }
 }
 
 private extension UIColor {

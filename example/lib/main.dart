@@ -102,14 +102,15 @@ class _KickFlipDemoAppState extends State<KickFlipDemoApp> {
   Future<void> _promptForConsent() async {
     final context = _navigatorKey.currentContext;
     if (context == null) return;
-    // iOS paste (onToken) = allow + deferred token: grant consent first (so the gated install can
-    // proceed), persist, then install with the token; the sheet then returns null (already handled).
+    // iOS paste (onToken) = allow + deferred token: the native paste handling has already granted
+    // consent (it was undecided) and sent the install with the token, so just persist the choice;
+    // the sheet then returns null (already handled).
     // Android returns the selected Allow/Deny via "Continue". Skip returns null (stays undecided).
     final decision = await showConsentSheet(
       context,
       onToken: (token) async {
-        await LinkTrail.setConsent(true);
         await _consentStore.save(Consent.granted);
+<<<<<<< HEAD
         _e2e.recordConsent(Consent.granted.name);
         try {
           await LinkTrail.trackInstallWithClickToken(token);
@@ -117,6 +118,9 @@ class _KickFlipDemoAppState extends State<KickFlipDemoApp> {
         } on LinkTrailException catch (e) {
           setState(() => _status = 'Token install failed · $e');
         }
+=======
+        setState(() => _status = 'Consent granted · install sent (token)');
+>>>>>>> origin/main
       },
     );
     if (decision == null) return; // skipped, or iOS paste already handled in onToken

@@ -13,7 +13,7 @@ let package = Package(
     ],
     dependencies: [
         .package(name: "FlutterFramework", path: "../FlutterFramework"),
-        .package(url: "https://github.com/linktrail-io/ios-sdk.git", from: "0.1.0")
+        .package(url: "https://github.com/linktrail-io/ios-sdk.git", .upToNextMinor(from: "0.1.0"))
     ],
     targets: [
         .target(

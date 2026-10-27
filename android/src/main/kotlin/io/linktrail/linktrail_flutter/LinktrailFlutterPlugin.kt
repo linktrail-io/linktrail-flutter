@@ -39,8 +39,14 @@ class LinktrailFlutterPlugin :
     private lateinit var onAttributionChannel: EventChannel
     private lateinit var onErrorChannel: EventChannel
 
-    private var onLinkSink: EventChannel.EventSink? = null
-    private var onAttributionSink: EventChannel.EventSink? = null
+    // Links and attribution are relayed through buffers so nothing native delivers before (or
+    // between) Dart listeners is lost. The native onLink/onAttribution callbacks are registered only
+    // once Dart first listens: native keeps an unclaimed deferred link on disk until then.
+    private val linkRelay = EventRelay<Map<String, Any?>>()
+    private val attributionRelay = EventRelay<Map<String, Any?>>(keepLastOnly = true)
+    private var linkHookWanted = false
+    private var attributionHookWanted = false
+    private var autoHandleLinks = true
     private var onErrorSink: EventChannel.EventSink? = null
 
     private var activityBinding: ActivityPluginBinding? = null
@@ -62,12 +68,13 @@ class LinktrailFlutterPlugin :
         onLinkChannel.setStreamHandler(
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
-                    onLinkSink = events
+                    linkHookWanted = true
+                    linkRelay.attach { events.success(it) }
                     attachHooks()
                 }
 
                 override fun onCancel(arguments: Any?) {
-                    onLinkSink = null
+                    linkRelay.detach()
                 }
             },
         )
@@ -76,12 +83,13 @@ class LinktrailFlutterPlugin :
         onAttributionChannel.setStreamHandler(
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
-                    onAttributionSink = events
+                    attributionHookWanted = true
+                    attributionRelay.attach { events.success(it) }
                     attachHooks()
                 }
 
                 override fun onCancel(arguments: Any?) {
-                    onAttributionSink = null
+                    attributionRelay.detach()
                 }
             },
         )
@@ -104,10 +112,14 @@ class LinktrailFlutterPlugin :
     /** (Re)registers the native callback hooks on the current `LinkTrail.shared` instance. */
     private fun attachHooks() {
         val sdk = LinkTrail.shared ?: return
-        sdk.onLink { link, source ->
-            onLinkSink?.success(mapOf("link" to link.toMap(), "source" to source.name.lowercase()))
+        if (linkHookWanted) {
+            sdk.onLink { link, source ->
+                linkRelay.send(mapOf("link" to link.toMap(), "source" to source.name.lowercase()))
+            }
         }
-        sdk.onAttribution { attribution -> onAttributionSink?.success(attribution.toMap()) }
+        if (attributionHookWanted) {
+            sdk.onAttribution { attribution -> attributionRelay.send(attribution.toMap()) }
+        }
         sdk.onError { throwable -> onErrorSink?.success(throwable.toErrorMap()) }
     }
 
@@ -124,12 +136,13 @@ class LinktrailFlutterPlugin :
                 try {
                     @Suppress("UNCHECKED_CAST")
                     val optionsMap = call.argument<Map<String, Any?>>("options")
+                    autoHandleLinks = optionsMap?.get("autoHandleLinks") as? Boolean ?: true
                     LinkTrail.configure(context, apiKey, parseOptions(optionsMap))
                     attachHooks()
                     // Replay a deep link that launched the app cold, before the SDK was configured.
                     pendingLaunchUri?.let { uri ->
                         pendingLaunchUri = null
-                        LinkTrail.shared?.handleDeepLink(uri)
+                        if (autoHandleLinks) LinkTrail.shared?.handleDeepLink(uri)
                     }
                     result.success(null)
                 } catch (e: Throwable) {
@@ -145,6 +158,24 @@ class LinktrailFlutterPlugin :
                     return
                 }
                 result.success(sdk.handleDeepLink(Uri.parse(urlString)))
+            }
+
+            "resolveDeepLink" -> {
+                val urlString = call.argument<String>("url")
+                if (urlString == null) {
+                    result.error("invalidArgument", "resolveDeepLink requires a url.", null)
+                    return
+                }
+                val sdk = LinkTrail.shared ?: return result.errorNotConfigured()
+                scope.launch {
+                    try {
+                        result.success(sdk.handleDeepLinkAsync(Uri.parse(urlString)).toMap())
+                    } catch (e: LinkTrailError.NotALinkTrailUrl) {
+                        result.success(null)
+                    } catch (e: Throwable) {
+                        result.error(e)
+                    }
+                }
             }
 
             "trackInstall" -> {
@@ -263,6 +294,7 @@ class LinktrailFlutterPlugin :
 
     /** Handle the launch URI now if the SDK is configured, otherwise buffer it for replay after configure(). */
     private fun handleOrBufferLaunchUri(uri: Uri) {
+        if (!autoHandleLinks) return
         val sdk = LinkTrail.shared
         if (sdk != null) sdk.handleDeepLink(uri) else pendingLaunchUri = uri
     }
@@ -279,7 +311,7 @@ class LinktrailFlutterPlugin :
     }
 
     override fun onNewIntent(intent: Intent): Boolean {
-        intent.data?.let { uri -> LinkTrail.shared?.handleDeepLink(uri) }
+        if (autoHandleLinks) intent.data?.let { uri -> LinkTrail.shared?.handleDeepLink(uri) }
         return false
     }
 }
@@ -309,9 +341,9 @@ private fun Throwable.toErrorMap(): Map<String, Any?> {
     val (code, details) =
         when (this) {
             is LinkTrailError.InvalidUrl -> "invalidUrl" to mapOf<String, Any?>("url" to url)
-            is LinkTrailError.Transport -> "transport" to noDetails
+            is LinkTrailError.Transport -> "transport" to mapOf<String, Any?>("detail" to detail)
             is LinkTrailError.Server -> "server" to mapOf<String, Any?>("statusCode" to statusCode, "body" to body)
-            is LinkTrailError.Decoding -> "decoding" to noDetails
+            is LinkTrailError.Decoding -> "decoding" to mapOf<String, Any?>("detail" to detail)
             is LinkTrailError.EmptyResponse -> "emptyResponse" to noDetails
             is LinkTrailError.NotALinkTrailUrl -> "notALinkTrailUrl" to noDetails
             is LinkTrailError.MissingApiKey -> "missingApiKey" to noDetails

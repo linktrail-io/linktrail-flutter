@@ -78,6 +78,18 @@ class MethodChannelLinktrailFlutter extends LinktrailFlutterPlatform {
   }
 
   @override
+  Future<LinkTrailDeepLink?> resolveDeepLink(Uri url) async {
+    try {
+      final map = await methodChannel.invokeMapMethod<Object?, Object?>('resolveDeepLink', {
+        'url': url.toString(),
+      });
+      return map == null ? null : LinkTrailDeepLink.fromMap(map);
+    } on PlatformException catch (e) {
+      throw LinkTrailException.fromPlatformException(e);
+    }
+  }
+
+  @override
   Future<LinkTrailAttribution> trackInstall({required bool force}) async {
     try {
       final map = await methodChannel.invokeMapMethod<Object?, Object?>('trackInstall', {

@@ -19,10 +19,19 @@ abstract final class LinkTrail {
 
   /// Fires for every deep link the SDK delivers — both deferred (first
   /// launch) and re-engagement links. Incoming platform links are captured
-  /// automatically; you don't need to forward `Intent`/`URL` values yourself.
+  /// automatically (see [LinkTrailOptions.autoHandleLinks]); you don't need to
+  /// forward `Intent`/`URL` values yourself.
+  ///
+  /// Nothing is lost before you listen: the native callback is registered only
+  /// when the first listener subscribes, so a deferred link stays saved natively
+  /// until then, and links delivered while nobody is listening are held (up to
+  /// 10, oldest dropped, for this app process) and delivered once, in order, to
+  /// the next listener. Listeners added after that get no replay.
   static Stream<LinkTrailLinkEvent> get onLink => LinktrailFlutterPlatform.instance.onLink;
 
-  /// Fires whenever an install/open attribution result is delivered.
+  /// Fires whenever an install/open attribution result is delivered. The
+  /// latest result delivered before the first listener subscribes is replayed
+  /// to it.
   static Stream<LinkTrailAttribution> get onAttribution => LinktrailFlutterPlatform.instance.onAttribution;
 
   /// Fires on any native SDK failure (network, decoding, a rejected API key, etc).
@@ -36,6 +45,14 @@ abstract final class LinkTrail {
   /// route it yourself.
   static Future<bool> handleDeepLink(Uri url) {
     return LinktrailFlutterPlatform.instance.handleDeepLink(url);
+  }
+
+  /// Resolves [url] like [handleDeepLink] and returns the resolved link, or
+  /// `null` for a non-LinkTrail URL (no network call). Throws a
+  /// [LinkTrailException] if resolution fails, e.g. [LinkTrailServerException].
+  /// A resolved link is also delivered to [onLink].
+  static Future<LinkTrailDeepLink?> resolveDeepLink(Uri url) {
+    return LinktrailFlutterPlatform.instance.resolveDeepLink(url);
   }
 
   /// Tracks an install/open event. Called automatically by [configure]

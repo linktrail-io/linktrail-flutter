@@ -5,8 +5,14 @@ import UIKit
 
 /// Flutter plugin wrapping the native `LinkTrailSDK` iOS SDK.
 public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate {
-  fileprivate var onLinkSink: FlutterEventSink?
-  fileprivate var onAttributionSink: FlutterEventSink?
+  // Links and attribution go through buffers so nothing native delivers before (or between) Dart
+  // listeners is lost. The native onLink/onAttribution callbacks are registered only once Dart first
+  // listens: native keeps an unclaimed deferred link persisted until then.
+  fileprivate let linkRelay = EventRelay<[String: Any?]>()
+  fileprivate let attributionRelay = EventRelay<[String: Any?]>(keepLastOnly: true)
+  fileprivate var linkHookWanted = false
+  fileprivate var attributionHookWanted = false
+  private var autoHandleLinks = true
   fileprivate var onErrorSink: FlutterEventSink?
 
   /// On a cold launch the open-URL / Universal-Link callbacks can fire before Dart has called
@@ -44,11 +50,15 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
   /// (Re)registers the native callback hooks on the current `LinkTrail.shared` instance.
   fileprivate func attachHooks() {
     guard let sdk = LinkTrail.shared else { return }
-    sdk.onLink { [weak self] link, source in
-      self?.onLinkSink?(["link": link.toMap(), "source": source.dartName])
+    if linkHookWanted {
+      sdk.onLink { [weak self] link, source in
+        self?.linkRelay.send(["link": link.toMap(), "source": source.dartName])
+      }
     }
-    sdk.onAttribution { [weak self] attribution in
-      self?.onAttributionSink?(attribution.toMap())
+    if attributionHookWanted {
+      sdk.onAttribution { [weak self] attribution in
+        self?.attributionRelay.send(attribution.toMap())
+      }
     }
     sdk.onError { [weak self] error in
       self?.onErrorSink?(toErrorMap(error))
@@ -67,13 +77,15 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
       // `args["sdkVersion"]` carries the plugin version for `X-LinkTrail-SDK: flutter/<version>`.
       // Not forwarded yet: the published LinkTrailSDK 0.1.0 binary does not export its
       // `@_spi(Wrapper) setSDKIdentifier` hook, so iOS requests still report `ios/<version>`.
+      let optionsMap = args?["options"] as? [String: Any]
+      autoHandleLinks = optionsMap?["autoHandleLinks"] as? Bool ?? true
       do {
-        _ = try LinkTrail.configure(apiKey: apiKey, options: Self.parseOptions(args?["options"] as? [String: Any]))
+        _ = try LinkTrail.configure(apiKey: apiKey, options: Self.parseOptions(optionsMap))
         attachHooks()
         // Replay a link that launched the app cold, before the SDK was configured.
         if let url = pendingLaunchURL {
           pendingLaunchURL = nil
-          LinkTrail.shared?.handleDeepLink(url)
+          if autoHandleLinks { LinkTrail.shared?.handleDeepLink(url) }
         }
         result(nil)
       } catch {
@@ -86,6 +98,26 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
         return
       }
       result(sdk.handleDeepLink(url))
+
+    case "resolveDeepLink":
+      guard let urlString = args?["url"] as? String, let url = URL(string: urlString) else {
+        result(FlutterError(code: "invalidArgument", message: "resolveDeepLink requires a valid url.", details: nil))
+        return
+      }
+      guard let sdk = LinkTrail.shared else {
+        result(FlutterError.notConfigured)
+        return
+      }
+      Task {
+        do {
+          let link: LinkTrailDeepLink = try await sdk.handleDeepLink(url)
+          result(link.toMap())
+        } catch LinkTrailError.notALinkTrailURL {
+          result(nil)
+        } catch {
+          result(toFlutterError(error))
+        }
+      }
 
     case "trackInstall":
       guard let sdk = LinkTrail.shared else {
@@ -260,6 +292,7 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
   /// Handle the URL now if the SDK is configured, otherwise buffer it for replay after configure().
   @discardableResult
   private func handleOrBufferLaunchURL(_ url: URL) -> Bool {
+    guard autoHandleLinks else { return false }
     if let sdk = LinkTrail.shared {
       return sdk.handleDeepLink(url)
     }
@@ -273,13 +306,14 @@ private final class LinkStreamHandler: NSObject, FlutterStreamHandler {
   init(plugin: LinktrailFlutterPlugin) { self.plugin = plugin }
 
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
-    plugin?.onLinkSink = events
+    plugin?.linkHookWanted = true
+    plugin?.linkRelay.attach { events($0) }
     plugin?.attachHooks()
     return nil
   }
 
   func onCancel(withArguments arguments: Any?) -> FlutterError? {
-    plugin?.onLinkSink = nil
+    plugin?.linkRelay.detach()
     return nil
   }
 }
@@ -289,13 +323,14 @@ private final class AttributionStreamHandler: NSObject, FlutterStreamHandler {
   init(plugin: LinktrailFlutterPlugin) { self.plugin = plugin }
 
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
-    plugin?.onAttributionSink = events
+    plugin?.attributionHookWanted = true
+    plugin?.attributionRelay.attach { events($0) }
     plugin?.attachHooks()
     return nil
   }
 
   func onCancel(withArguments arguments: Any?) -> FlutterError? {
-    plugin?.onAttributionSink = nil
+    plugin?.attributionRelay.detach()
     return nil
   }
 }
@@ -393,9 +428,9 @@ private func toFlutterError(_ error: Error) -> FlutterError {
   let (code, details): (String, [String: Any?]) =
     switch error {
     case LinkTrailError.invalidURL(let url): ("invalidUrl", ["url": url])
-    case LinkTrailError.transport(let message): ("transport", ["message": message])
+    case LinkTrailError.transport(let message): ("transport", ["detail": message])
     case LinkTrailError.server(let statusCode, let body): ("server", ["statusCode": statusCode, "body": body])
-    case LinkTrailError.decoding(let message): ("decoding", ["message": message])
+    case LinkTrailError.decoding(let message): ("decoding", ["detail": message])
     case LinkTrailError.emptyResponse: ("emptyResponse", [:])
     case LinkTrailError.notALinkTrailURL: ("notALinkTrailUrl", [:])
     case LinkTrailError.missingAPIKey: ("missingApiKey", [:])

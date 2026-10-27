@@ -1,3 +1,22 @@
+## 0.1.1
+
+Parity release with the React Native wrapper (still wraps the native 0.1.0 SDKs).
+
+- **`onLink` / `onAttribution` never lose an early delivery.** The native callbacks are registered
+  only once Dart first listens, so a deferred link stays saved natively until a listener exists.
+  Links that arrive while no listener is attached are held (up to 10, oldest dropped, this process
+  only) and delivered once, in order, to the next listener; the latest attribution is replayed.
+- New `LinkTrail.resolveDeepLink(Uri)` returns the resolved `LinkTrailDeepLink`, or `null` for a
+  non-LinkTrail URL. `handleDeepLink` still returns `bool`.
+- New `LinkTrailOptions.autoHandleLinks` (default `true`, the existing behaviour): set `false` to
+  stop the plugin capturing launch and incoming links.
+- **Changed: errors carry the native message.** Every `LinkTrailException` has a camelCase `code`
+  and the native SDK's own `message` instead of a wrapper-written one. New
+  `LinkTrailNotConfiguredException` and `LinkTrailInvalidArgumentException` (previously
+  `LinkTrailUnknownException`). `LinkTrailServerException` keeps `statusCode` and `body`. The
+  subtype constructors now take the message (only matters if you construct them yourself).
+- iOS SPM dependency pinned to `.upToNextMinor(from: "0.1.0")`, matching the podspec's `~> 0.1.0`.
+
 ## 0.1.0
 
 Wraps the native 0.1.0 SDKs: iOS `LinkTrailSDK ~> 0.1.0` (CocoaPods and SPM) and Android

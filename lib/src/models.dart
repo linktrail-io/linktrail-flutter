@@ -70,11 +70,14 @@ class LinkTrailOptions {
   final Duration requestTimeout;
   final LinkTrailRetryPolicy retryPolicy;
 
-  /// Universal Link / App Link hosts that belong to this app (e.g.
-  /// `kick.linktrail.io`). When non-empty, **re-engagement** opens (app already
-  /// installed) only route for these hosts — a link on an unlisted host opens
-  /// the app but never navigates. Deferred (install-time) links route
-  /// regardless. Leave empty to handle every parseable link.
+  /// Your **custom** link domains (e.g. `go.acme.com`), forwarded to both
+  /// native SDKs. [LinkTrail.handleDeepLink] and the automatic link capture
+  /// only claim `https` links on `linktrail.io` (or a subdomain) or on one of
+  /// these hosts (or a subdomain); any other URL (`mailto:`, OAuth callbacks,
+  /// `myapp://settings`) is ignored, makes no network call and does not reach
+  /// [LinkTrail.onError]. Links on `*.linktrail.io` need no entry. Entries are
+  /// normalised natively (scheme, path and port dropped, lowercased); invalid
+  /// ones are ignored with a warning.
   final List<String> linkDomains;
 
   /// Whether [LinkTrail.configure] fires an install/open event automatically.
@@ -144,6 +147,11 @@ class LinkTrailDeepLink {
   final String? campaign;
   final String? channel;
   final Map<String, String>? utm;
+
+  /// The link's custom key/value data. Every value is a string: a nested
+  /// object or array set on the link arrives as a compact JSON string
+  /// (`{"x":1}`, `["a","b"]`), so decode it with `jsonDecode` when you need
+  /// the structure. On iOS, object keys inside those strings are sorted.
   final Map<String, String>? customData;
 
   /// The path to route on, falling back to `/` when the link carries none.

@@ -6,7 +6,9 @@ import 'package:flutter/widgets.dart';
 
 /// Apple's `UIPasteControl` for deferred-attribution — reads the click token
 /// the tapped link left on the clipboard **without** the system "Allow Paste"
-/// alert, and hands it to the LinkTrail SDK to complete the install.
+/// alert, and hands it to the LinkTrail SDK, which records consent (see
+/// [grantsConsent]) and sends the install with the token. You don't need to
+/// call [LinkTrail.trackInstallWithClickToken] yourself.
 ///
 /// iOS 16+ only. Use with `LinkTrailOptions(clickTokenSource: pasteButton,
 /// autoTrackInstall: false)` so the install waits for the tap. On Android (and
@@ -18,10 +20,22 @@ import 'package:flutter/widgets.dart';
 /// [color] themes the button fill (defaults to the ambient primary color).
 /// Apple restricts the rest of the appearance — no custom label text or font.
 class LinkTrailPasteButton extends StatelessWidget {
-  const LinkTrailPasteButton({super.key, this.onToken, this.color, this.height = 48});
+  const LinkTrailPasteButton({super.key, this.onToken, this.grantsConsent, this.color, this.height = 48});
 
-  /// Fires with the click token after the SDK reads it from the pasted content.
+  /// Fires with the raw pasted string after the native SDK has started the
+  /// install with it. Use it only for your own side effects (advance your UI,
+  /// persist the consent choice); the install is already handled.
   final void Function(String token)? onToken;
+
+  /// Whether the tap also records tracking consent (iOS SDK `grantsConsent`).
+  ///
+  /// - `null` (default): grants consent only while it is still undecided. A
+  ///   user who already denied ([LinkTrail.setConsent] `false`) stays denied;
+  ///   the token is still used for routing.
+  /// - `true`: the tap always grants consent, even over an earlier denial.
+  ///   Pass it only when your UI makes the tap an explicit opt-in.
+  /// - `false`: the tap never touches consent (you collect it separately).
+  final bool? grantsConsent;
 
   /// Fill color for the button. Defaults to the theme's primary color.
   final Color? color;
@@ -41,7 +55,7 @@ class LinkTrailPasteButton extends StatelessWidget {
       width: double.infinity,
       child: UiKitView(
         viewType: _viewType,
-        creationParams: <String, Object?>{'color': _argb(fill)},
+        creationParams: <String, Object?>{'color': _argb(fill), 'grantsConsent': grantsConsent},
         creationParamsCodec: const StandardMessageCodec(),
         onPlatformViewCreated: _onCreated,
       ),

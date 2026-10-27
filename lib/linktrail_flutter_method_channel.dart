@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'linktrail_flutter_platform_interface.dart';
 import 'src/errors.dart';
 import 'src/models.dart';
+import 'src/version.dart';
 
 /// An implementation of [LinktrailFlutterPlatform] that uses method channels.
 class MethodChannelLinktrailFlutter extends LinktrailFlutterPlatform {
@@ -25,6 +26,8 @@ class MethodChannelLinktrailFlutter extends LinktrailFlutterPlatform {
       await methodChannel.invokeMethod<void>('configure', {
         'apiKey': apiKey,
         'options': options.toMap(),
+        // Reported by the native SDKs as `X-LinkTrail-SDK: flutter/<version>`.
+        'sdkVersion': linkTrailFlutterVersion,
       });
     } on PlatformException catch (e) {
       throw LinkTrailException.fromPlatformException(e);

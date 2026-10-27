@@ -18,6 +18,7 @@ import io.linktrail.LinkTrailError
 import io.linktrail.LinkTrailLogLevel
 import io.linktrail.LinkTrailOptions
 import io.linktrail.LinkTrailRetryPolicy
+import io.linktrail.internal.LinkTrailWrapper
 import io.linktrail.model.LinkTrailAttribution
 import io.linktrail.model.LinkTrailDeepLink
 import io.linktrail.model.LinkTrailEventResult
@@ -118,6 +119,8 @@ class LinktrailFlutterPlugin :
                     result.error("missingApiKey", "An API key is required to configure LinkTrail.", null)
                     return
                 }
+                // Report the wrapper in `X-LinkTrail-SDK` (flutter/<plugin version>) before the first request.
+                call.argument<String>("sdkVersion")?.let { LinkTrailWrapper.setPlatform("flutter", it) }
                 try {
                     @Suppress("UNCHECKED_CAST")
                     val optionsMap = call.argument<Map<String, Any?>>("options")

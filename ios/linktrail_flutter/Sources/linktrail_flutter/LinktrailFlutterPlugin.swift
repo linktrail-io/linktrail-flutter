@@ -1,5 +1,6 @@
 import Flutter
 import LinkTrailSDK
+import SwiftUI
 import UIKit
 
 /// Flutter plugin wrapping the native `LinkTrailSDK` iOS SDK.
@@ -63,6 +64,9 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
         result(FlutterError(code: "missingApiKey", message: "An API key is required to configure LinkTrail.", details: nil))
         return
       }
+      // `args["sdkVersion"]` carries the plugin version for `X-LinkTrail-SDK: flutter/<version>`.
+      // Not forwarded yet: the published LinkTrailSDK 0.1.0 binary does not export its
+      // `@_spi(Wrapper) setSDKIdentifier` hook, so iOS requests still report `ios/<version>`.
       do {
         _ = try LinkTrail.configure(apiKey: apiKey, options: Self.parseOptions(args?["options"] as? [String: Any]))
         attachHooks()
@@ -426,15 +430,18 @@ final class LinkTrailPasteButtonFactory: NSObject, FlutterPlatformViewFactory {
   }
 }
 
-/// Hosts Apple's native `UIPasteControl` (iOS 16+) themed to a caller-supplied color, and forwards
-/// the pasted click token back to Dart over a per-view method channel. Renders an empty view on
+/// Hosts Apple's native `UIPasteControl` (iOS 16+) themed to a caller-supplied color. The paste
+/// target is the native `LinkTrailPasteButton` coordinator, so the tap gets the SDK's own handling
+/// (`grantsConsent` semantics, then the install with the token); the pasted string is then
+/// forwarded to Dart over a per-view method channel. Renders an empty view on
 /// older iOS. Using `UIPasteControl` (rather than reading the clipboard directly) is what avoids the
 /// system "Allow Paste" alert.
 final class LinkTrailPasteButtonPlatformView: NSObject, FlutterPlatformView {
   private let container: UIView
   private let channel: FlutterMethodChannel
-  // Stored as the base type so this class doesn't inherit LinkTrailPasteReceiver's iOS 16 availability.
-  private var receiver: UIView?
+  // Stored as the base type so this class doesn't inherit the iOS 16 availability. UIPasteControl
+  // holds its target weakly, so the view keeps it alive.
+  private var target: UIResponder?
 
   init(frame: CGRect, viewId: Int64, messenger: FlutterBinaryMessenger, args: Any?) {
     container = UIView(frame: frame)
@@ -452,41 +459,24 @@ final class LinkTrailPasteButtonPlatformView: NSObject, FlutterPlatformView {
       config.baseForegroundColor = .white
       if let fillColor { config.baseBackgroundColor = fillColor }
 
-      let receiver = LinkTrailPasteReceiver()
-      receiver.onToken = { [weak channel] token in channel?.invokeMethod("onToken", arguments: token) }
-      // UIPasteControl only enables when its target declares — via a paste configuration — that it
-      // accepts the clipboard's content type. Without this the button stays disabled/greyed out.
-      receiver.pasteConfiguration = UIPasteConfiguration(acceptableTypeIdentifiers: [
-        "public.utf8-plain-text", "public.plain-text", "public.text", "public.url",
-      ])
+      // nil (the default) = grant consent only while it is still undecided; never `true` by default.
+      let grantsConsent = argMap?["grantsConsent"] as? Bool
+      let coordinator = LinkTrailPasteButton(grantsConsent: grantsConsent) { [weak channel] token in
+        channel?.invokeMethod("onToken", arguments: token)
+      }.makeCoordinator()
+      // The coordinator declares a paste configuration for text, which UIPasteControl needs to enable.
 
       let control = UIPasteControl(configuration: config)
-      control.target = receiver
+      control.target = coordinator
       control.frame = container.bounds
       control.autoresizingMask = [.flexibleWidth, .flexibleHeight]
 
-      container.addSubview(receiver)
       container.addSubview(control)
-      self.receiver = receiver
+      self.target = coordinator
     }
   }
 
   func view() -> UIView { container }
-}
-
-/// The paste target for the `UIPasteControl`. When the user taps the control, the system loads the
-/// clipboard items and calls `paste(itemProviders:)` here — with no "Allow Paste" alert.
-@available(iOS 16.0, *)
-final class LinkTrailPasteReceiver: UIView {
-  var onToken: ((String) -> Void)?
-
-  override func paste(itemProviders: [NSItemProvider]) {
-    guard let provider = itemProviders.first(where: { $0.canLoadObject(ofClass: NSString.self) }) else { return }
-    provider.loadObject(ofClass: NSString.self) { [weak self] object, _ in
-      guard let token = object as? String else { return }
-      DispatchQueue.main.async { self?.onToken?(token) }
-    }
-  }
 }
 
 private extension UIColor {

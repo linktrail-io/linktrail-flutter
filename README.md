@@ -324,6 +324,18 @@ cd example && flutter run --dart-define=LINKTRAIL_API_KEY=lt_live_…
 Supply your key at build time so it never lands in source control. See
 [example/README.md](example/README.md).
 
+## Auto-merge
+
+Put `auto-merge` anywhere in a PR title (any case, e.g. `[auto-merge] Fix typo`) and the
+`Auto-merge` workflow (`.github/workflows/auto-merge.yml`) turns on GitHub auto-merge for it.
+GitHub then merges it with a merge commit (never squash, so stacked PRs keep working) once the
+required checks and approvals pass. Drafts are skipped: auto-merge turns on when the PR is marked
+ready for review. Remove the word from the title, or convert the PR back to draft, to turn it off.
+PRs from forks are ignored. Until the `AUTOMERGE_TOKEN` org secret exists, the merge is made with
+`GITHUB_TOKEN`, which does not trigger the push workflows on the base branch.
+
+This repo's `main` ruleset requires an approving review, so auto-merge completes only after the PR is approved.
+
 ## License
 
 MIT — see [LICENSE](LICENSE). Note the plugin is open source, but the LinkTrail service it talks to

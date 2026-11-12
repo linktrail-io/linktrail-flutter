@@ -74,9 +74,10 @@ public class LinktrailFlutterPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCy
         result(FlutterError(code: "missingApiKey", message: "An API key is required to configure LinkTrail.", details: nil))
         return
       }
-      // `args["sdkVersion"]` carries the plugin version for `X-LinkTrail-SDK: flutter/<version>`.
-      // Not forwarded yet: the published LinkTrailSDK 0.1.0 binary does not export its
-      // `@_spi(Wrapper) setSDKIdentifier` hook, so iOS requests still report `ios/<version>`.
+      // Report the wrapper in `X-LinkTrail-SDK` (flutter/<plugin version>) before the first request.
+      if let sdkVersion = args?["sdkVersion"] as? String {
+        LinkTrail.setSDKIdentifier(platform: "flutter", version: sdkVersion)
+      }
       let optionsMap = args?["options"] as? [String: Any]
       autoHandleLinks = optionsMap?["autoHandleLinks"] as? Bool ?? true
       do {
@@ -435,6 +436,7 @@ private func toFlutterError(_ error: Error) -> FlutterError {
     case LinkTrailError.notALinkTrailURL: ("notALinkTrailUrl", [:])
     case LinkTrailError.missingAPIKey: ("missingApiKey", [:])
     case LinkTrailError.invalidAPIKey: ("invalidApiKey", [:])
+    case LinkTrailError.invalidEvent(let reason): ("invalidEvent", ["reason": reason])
     default: ("unknown", [:])
     }
   return FlutterError(code: code, message: error.localizedDescription, details: details)

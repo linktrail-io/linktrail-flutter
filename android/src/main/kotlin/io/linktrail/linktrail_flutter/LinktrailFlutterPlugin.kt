@@ -336,7 +336,7 @@ private fun LinkTrailAttribution.toMap(): Map<String, Any?> =
 private fun LinkTrailEventResult.toMap(): Map<String, Any?> = mapOf("id" to id, "attributed" to attributed)
 
 /** Maps a caught native error to `{code, message, details}`, matching the Dart `LinkTrailException` codes. */
-private fun Throwable.toErrorMap(): Map<String, Any?> {
+internal fun Throwable.toErrorMap(): Map<String, Any?> {
     val noDetails = emptyMap<String, Any?>()
     val (code, details) =
         when (this) {
@@ -348,6 +348,7 @@ private fun Throwable.toErrorMap(): Map<String, Any?> {
             is LinkTrailError.NotALinkTrailUrl -> "notALinkTrailUrl" to noDetails
             is LinkTrailError.MissingApiKey -> "missingApiKey" to noDetails
             is LinkTrailError.InvalidApiKey -> "invalidApiKey" to noDetails
+            is LinkTrailError.InvalidEvent -> "invalidEvent" to mapOf<String, Any?>("reason" to reason)
             else -> "unknown" to noDetails
         }
     return mapOf("code" to code, "message" to (message ?: code), "details" to details)

@@ -231,7 +231,8 @@ class LinktrailFlutterPlugin :
             "getLastAttribution" -> result.success(LinkTrail.shared?.lastAttribution?.toMap())
             "getLastDeepLink" -> result.success(LinkTrail.shared?.lastDeepLink?.toMap())
 
-            // ATT / SKAdNetwork are iOS-only concepts; no-ops on Android.
+            // ATT / SKAdNetwork are iOS-only concepts; no-ops on Android. Android has no OS tracking-permission
+            // gate, so requestTrackingAuthorization is "not applicable" and resolves true (RN matches).
             "requestTrackingAuthorization" -> result.success(true)
             "registerForSKAdAttribution" -> result.success(null)
             "updateConversionValue" -> result.success(null)

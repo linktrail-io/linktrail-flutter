@@ -17,64 +17,130 @@ env:
   FLUTTER_VERSION: "3.44.5"
 
 jobs:
+  # Docs-only pull requests skip the heavy work. The workflow still triggers on every PR, because
+  # its jobs are required status checks and a paths-ignore would leave them pending forever.
+  # Instead this job decides, and the jobs below still run (and report) but skip their heavy
+  # steps, passing in seconds. Only a pull_request run can skip: push, merge_group, schedule,
+  # workflow_dispatch and workflow_call always run in full. So does anything unexpected (git
+  # error, empty diff, this job failing). The patterns live in scripts/docs-only-changes.sh.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.decide.outputs.docs_only }}
+    steps:
+      - name: Checkout
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the diff needs the base branch and the merge base
+
+      - name: Decide whether this is a docs-only change
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -uo pipefail
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "Event '$EVENT': full run."
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # --no-renames: a file moved into docs/ shows as delete + add, so it still counts as code.
+          if ! files="$(git -c core.quotePath=false diff --name-only --no-renames "origin/$BASE_REF...HEAD")"; then
+            echo "::warning::Could not list changed files against origin/$BASE_REF; running everything."
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Changed files:"; printf '%s\n' "$files" | sed 's/^/  /'
+          verdict="$(printf '%s\n' "$files" | bash scripts/docs-only-changes.sh)" || verdict=""
+          [ "$verdict" = "docs_only=true" ] || verdict="docs_only=false"
+          echo "$verdict" >> "$GITHUB_OUTPUT"
+
   analyze-test-android:
     name: Analyze · test · Android build
+    needs: changes
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
+      - name: Docs-only change — skipped
+        if: needs.changes.outputs.docs_only == 'true'
+        run: echo "::notice title=Analyze · test · Android build::docs-only change — skipped"
+
       - uses: actions/checkout@v4
+        if: needs.changes.outputs.docs_only != 'true'
 
       - uses: actions/setup-java@v4
+        if: needs.changes.outputs.docs_only != 'true'
         with:
           distribution: temurin
           java-version: "17"
 
       - uses: subosito/flutter-action@v2
+        if: needs.changes.outputs.docs_only != 'true'
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
       - run: flutter --version
+        if: needs.changes.outputs.docs_only != 'true'
 
       - name: Install dependencies
+        if: needs.changes.outputs.docs_only != 'true'
         run: flutter pub get
 
       - name: Analyze
+        if: needs.changes.outputs.docs_only != 'true'
         run: flutter analyze
 
       - name: Run tests
+        if: needs.changes.outputs.docs_only != 'true'
         run: flutter test
 
       # Validates pubspec/CHANGELOG/LICENSE/packaging without publishing — catches release-breaking
       # metadata before an (irreversible) `flutter pub publish`.
       - name: Publish dry-run
+        if: needs.changes.outputs.docs_only != 'true'
         run: flutter pub publish --dry-run
 
       - name: Build example (Android APK, debug)
+        if: needs.changes.outputs.docs_only != 'true'
         working-directory: example
         run: flutter build apk --debug
 
   ios-build:
     name: iOS build (no codesign)
+    needs: changes
+    if: ${{ !cancelled() }}
     runs-on: macos-latest
     steps:
+      - name: Docs-only change — skipped
+        if: needs.changes.outputs.docs_only == 'true'
+        run: echo "::notice title=iOS build::docs-only change — skipped"
+
       - uses: actions/checkout@v4
+        if: needs.changes.outputs.docs_only != 'true'
 
       - uses: subosito/flutter-action@v2
+        if: needs.changes.outputs.docs_only != 'true'
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
       - run: flutter --version
+        if: needs.changes.outputs.docs_only != 'true'
 
       - name: Install dependencies
+        if: needs.changes.outputs.docs_only != 'true'
         run: flutter pub get
 
       # LANG/LC_ALL avoid the CocoaPods "ASCII-8BIT" Ruby locale crash. `flutter build ios` runs
       # `pod install` internally; if the CocoaPods CDN lags right after a new LinkTrailSDK release,
       # add a `pod repo update` step here.
       - name: Build example (iOS, no codesign)
+        if: needs.changes.outputs.docs_only != 'true'
         working-directory: example
         env:
           LANG: en_US.UTF-8

@@ -47,6 +47,8 @@ sealed class LinkTrailException implements Exception {
         return LinkTrailNotConfiguredException(message);
       case 'invalidArgument':
         return LinkTrailInvalidArgumentException(message);
+      case 'invalidEvent':
+        return LinkTrailInvalidEventException(details['reason'] as String? ?? '', message);
       default:
         return LinkTrailUnknownException(message, code: e.code);
     }
@@ -106,6 +108,15 @@ class LinkTrailNotConfiguredException extends LinkTrailException {
 /// A required argument was missing or malformed.
 class LinkTrailInvalidArgumentException extends LinkTrailException {
   const LinkTrailInvalidArgumentException(String message) : super('invalidArgument', message);
+}
+
+/// `trackEvent` was called with arguments the native SDK rejects (a blank name, a value that is
+/// not finite or is negative, or a currency that is not 3 letters). Nothing was sent or queued.
+class LinkTrailInvalidEventException extends LinkTrailException {
+  const LinkTrailInvalidEventException(this.reason, String message) : super('invalidEvent', message);
+
+  /// The native SDK's reason, e.g. `name is blank`.
+  final String reason;
 }
 
 /// Fallback for a native error code the Dart layer doesn't recognize yet.

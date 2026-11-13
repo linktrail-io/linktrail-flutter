@@ -18,7 +18,7 @@ or add it to your app's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  linktrail_flutter: ^0.1.1
+  linktrail_flutter: ^0.2.0
 ```
 
 Then `flutter pub get`. The native SDKs are pulled in automatically — no manual Gradle or CocoaPods
@@ -290,7 +290,12 @@ Every custom link host you declare here must also be in `linkDomains` (see
 Every `LinkTrailException` has a camelCase `code` matching the native error case, and its `message`
 is the native SDK's message, unchanged: `missingApiKey`, `invalidApiKey`, `notConfigured`,
 `invalidUrl`, `notALinkTrailUrl`, `transport`, `server`, `decoding`, `emptyResponse`,
-`invalidArgument`. `LinkTrailServerException` also has `statusCode` and `body`.
+`invalidArgument`, `invalidEvent`. `LinkTrailServerException` also has `statusCode` and `body`.
+
+`invalidEvent` (`LinkTrailInvalidEventException`) comes from `trackEvent` when the native SDK
+rejects its arguments: a blank `name`, a `value` that is NaN, infinite or negative, or a `currency`
+that isn't 3 letters. Nothing is sent. `reason` holds the native reason (for example
+`name is blank`) and `message` is `Invalid event: <reason>`. The plugin adds no checks of its own.
 
 ## Upgrading to 0.1.0
 
@@ -306,8 +311,7 @@ which have breaking changes:
 - **Nested `customData` values arrive as JSON strings** (see above).
 - **`setConsent(false)` wins even with `requireConsent: false`**, and SDK state is no longer backed
   up, so a restored or migrated device asks for consent again.
-- Android requests now send `X-LinkTrail-SDK: flutter/<plugin version>` (iOS still reports
-  `ios/<version>` until the native SDK exports its wrapper hook).
+- Android requests now send `X-LinkTrail-SDK: flutter/<plugin version>` (iOS does too from 0.2.0).
 
 See the native changelogs for the full list.
 

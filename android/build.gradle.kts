@@ -72,7 +72,7 @@ kotlin {
 }
 
 dependencies {
-    implementation("io.linktrail:sdk:0.1.0")
+    implementation("io.linktrail:sdk:0.2.0")
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("org.mockito:mockito-core:5.0.0")
 }

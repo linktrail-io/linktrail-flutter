@@ -1,3 +1,17 @@
+## 0.2.0
+
+Wraps the native 0.2.0 SDKs: iOS `LinkTrailSDK ~> 0.2.0` (CocoaPods and SPM
+`.upToNextMinor(from: "0.2.0")`) and Android `io.linktrail:sdk:0.2.0`. All four LinkTrail SDKs now
+share one version.
+
+- New error code `invalidEvent` (`LinkTrailInvalidEventException`, with `reason`). `trackEvent`
+  reports it when the native SDK rejects its arguments: a blank `name`, a `value` that is NaN,
+  infinite or negative, or a `currency` that isn't 3 letters. Nothing is sent. The message is the
+  native one (`Invalid event: <reason>`); the plugin adds no checks of its own. Previously such
+  calls failed at the server.
+- iOS requests now send `X-LinkTrail-SDK: flutter/<plugin version>`, as Android already does.
+- Other native 0.2.0 changes need no plugin API change; see the native changelogs.
+
 ## 0.1.1
 
 Parity release with the React Native wrapper (still wraps the native 0.1.0 SDKs).

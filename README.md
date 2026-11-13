@@ -96,6 +96,28 @@ the first listener subscribes (a deferred link stays saved natively until then),
 arrive while nobody listens are held (up to 10, this process only) and delivered once, in order, to
 the next listener. `onAttribution` replays the latest result to its first listener.
 
+### Deferred link delivery
+
+When the install resolves a deferred link, the native SDK saves it until `onLink` has a listener
+and then delivers it (`source: deferred`) **at least once**, even on a later launch if the app was
+killed first. So you can listen after a splash, onboarding or login screen. A saved link older than
+**7 days** is dropped and never delivered. The first deferred link wins: while one is waiting, a
+later install doesn't replace it. Delivery can repeat, so make your `onLink` handler safe to run
+twice for the same link.
+
+### `configure` is a singleton
+
+Calling `configure` again with the same key and options is a no-op. A call with a different key or
+different options shuts the previous native instance down (its pending work is cancelled) and
+replaces it. Your Dart stream subscriptions stay valid: the plugin re-registers its native
+callbacks on every `configure`.
+
+### Testing
+
+`LinkTrail.resetForTesting()` clears the native SDK state (install flag, cached attribution, saved
+deferred link, queued events and device id), so the next launch sends a fresh install. Use it in
+tests and QA builds only.
+
 Incoming links are captured for you (`LinkTrailOptions.autoHandleLinks`, default `true`): the launch
 link (held until `configure` on a cold start) and every later one, on Android (`Intent`) and iOS
 (app and scene delegates), go to the native `handleDeepLink`. Set it to `false` to route links
@@ -114,10 +136,16 @@ try {
 
 ## Consent gating (GDPR / ePrivacy)
 
-`LinkTrailOptions.requireConsent` defaults to **`true`** — **deny-by-default**. Until you call
-`LinkTrail.setConsent(true)`, the SDK **holds the install and drops events**. Deep links **still
-route** without consent (`onLink` fires and the user reaches the destination); only the
-*attribution/tracking* is gated. `setConsent(false)` stops sending and clears the queue.
+`LinkTrailOptions.requireConsent` defaults to **`true`** — **deny-by-default**:
+
+| Decision | What the SDK sends |
+| --- | --- |
+| not made yet | nothing: the install is **held** (persisted across launches) and events are dropped |
+| granted (`setConsent(true)`) | the install with `consent: true`, counted and attributed; events are sent |
+| denied (`setConsent(false)`) | **one** install with `consent: false` and no device id, so the deep link still resolves and the user is routed, but nothing is recorded; queued and new events are dropped |
+
+Because the deferred link is resolved by that install, it routes **after** the user answers,
+whichever answer it is. `setConsent(false)` always wins, even with `requireConsent: false`.
 
 There is **no consent getter** — the app is the source of truth. Persist the choice yourself and
 replay it on **every launch** right after `configure`, so a previously-granted user resumes
@@ -132,7 +160,8 @@ if (consent == 'granted') await LinkTrail.setConsent(true);
 if (consent == 'denied') await LinkTrail.setConsent(false);
 ```
 
-Set `requireConsent: false` to opt out of gating and track automatically (the pre-consent behavior).
+Set `requireConsent: false` to opt out of gating and track automatically (the pre-consent
+behavior). An explicit `setConsent(false)` still wins.
 
 ## `linkDomains` — custom link domains
 
@@ -148,6 +177,21 @@ await LinkTrail.configure(
 
 Any other URL (`mailto:`, OAuth callbacks, `myapp://settings`) is ignored: `handleDeepLink`
 returns `false`, no request is made and `onError` does not fire, so route those yourself.
+Custom-scheme LinkTrail links (`myapp://slug`) are not handled; use the `https` link. Links on
+`*.linktrail.io` need no entry.
+
+**Upgrading from 0.0.x:** an empty `linkDomains` no longer means "handle every link". If you relied
+on that with your own domain, list it:
+
+```dart
+// 0.0.x: worked with no linkDomains
+await LinkTrail.configure(apiKey: 'lt_live_…');
+// 0.1.0+: custom domains must be listed
+await LinkTrail.configure(
+  apiKey: 'lt_live_…',
+  options: const LinkTrailOptions(linkDomains: ['go.acme.com']),
+);
+```
 
 ## `customData` values
 
@@ -165,6 +209,9 @@ On iOS, deferred attribution recovers a **click token** the tapped link leaves o
   `autoTrackInstall: false` so the install waits for the tap.
 - **`automatic`** — the SDK reads the clipboard itself at install (no UI, but iOS shows the "Allow
   Paste" alert on first launch).
+- **`none`** — the SDK never touches the clipboard (no button, no alert, and even
+  `trackInstallWithClickToken` ignores a token handed to it). Deferred matching falls back to
+  probabilistic IP matching only.
 
 ```dart
 LinkTrailPasteButton(
@@ -177,8 +224,10 @@ LinkTrailPasteButton(
 )
 ```
 
-The tap records consent per `grantsConsent` and sends the install with the click token itself, so
-don't also call `trackInstallWithClickToken` from `onToken`.
+The tap goes through the native SDK's paste button: it records consent per `grantsConsent` and
+sends the install with the click token itself, so don't also call `trackInstallWithClickToken` from
+`onToken`. With the default `null`, an earlier `setConsent(false)` stands; the pasted token is still
+used to route the user (the install goes out with `consent: false`).
 
 The widget renders the native control on iOS 16+ and **nothing on Android** (Play Install Referrer
 handles deferred attribution there, so `clickTokenSource` and the paste button are ignored). Apple
@@ -186,10 +235,9 @@ restricts customization — no custom label text, font or border.
 
 ## Implementation notes
 
-- **Subscribe to `onLink` before any `await` after `configure`.** A cold-start deep link (deferred
-  first-launch, or a Universal Link that launched the app) is delivered right after `configure`; if
-  you await something first (e.g. reading consent from storage), the delivery lands with no listener
-  and is lost. Wire `onLink` first, *then* do async setup.
+- **You can subscribe to `onLink` late.** A deferred link stays saved natively until the first
+  listener subscribes, and re-engagement links that arrive with no listener are held (up to 10, this
+  process only). See [Deferred link delivery](#deferred-link-delivery).
 - Consent has no getter — replay it from your own storage on every launch (see above).
 
 ## Deep-link setup
@@ -209,16 +257,17 @@ Declare your App Links host (and optionally a custom scheme) in `android/app/src
 </intent-filter>
 ```
 
-Then host a Digital Asset Links file at `https://<host>/.well-known/assetlinks.json` listing your
-package + signing-cert SHA-256 (LinkTrail infra hosts this for your links). If links open the
-browser or Play Store instead of your installed app, that's almost always App Links verification —
+LinkTrail hosts the Digital Asset Links file (`https://<host>/.well-known/assetlinks.json`) for
+your link domains; register your package name and signing-cert SHA-256 with LinkTrail. If links
+open the browser or Play Store instead of your installed app, that's almost always App Links verification —
 see the Android SDK's [TROUBLESHOOTING.md](https://github.com/linktrail-io/android-sdk/blob/main/TROUBLESHOOTING.md).
 
 ### iOS
 
-Add the **Associated Domains** capability with `applinks:kick.linktrail.io`, and host an
-`apple-app-site-association` file on that domain. For a custom scheme, add it under
-`CFBundleURLTypes` in `ios/Runner/Info.plist`:
+Add the **Associated Domains** capability with `applinks:kick.linktrail.io` (one entry per link
+host). LinkTrail hosts the `apple-app-site-association` file for your link domains. Custom URL
+schemes are your own routing (the SDK only claims `https` LinkTrail links); if your app uses one,
+add it under `CFBundleURLTypes` in `ios/Runner/Info.plist`:
 
 ```xml
 <key>CFBundleURLTypes</key>
@@ -233,10 +282,8 @@ Add the **Associated Domains** capability with `applinks:kick.linktrail.io`, and
 On iOS 13+ the plugin registers on the **UIScene lifecycle**, so links are delivered correctly on
 iOS 26 (`FlutterSceneDelegate`) as well as the classic app-delegate lifecycle.
 
-### List every custom link host in `linkDomains`
-
-Custom link domains must be listed in `linkDomains`; `handleDeepLink` ignores non-LinkTrail URLs.
-Links on `*.linktrail.io` need no entry.
+Every custom link host you declare here must also be in `linkDomains` (see
+[`linkDomains`](#linkdomains--custom-link-domains)).
 
 ## Error codes
 

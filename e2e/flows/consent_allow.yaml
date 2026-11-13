@@ -1,0 +1,10 @@
+# Consent · allow. Needs no secrets: the consent sheet commits "Allow tracking" and the app records it.
+# Run through e2e/run.sh, which passes APP_ID for the platform.
+appId: ${APP_ID}
+tags: [smoke, local]
+---
+- launchApp: { clearState: true }
+- extendedWaitUntil: { visible: "Help us attribute your visit", timeout: 60000 }
+- tapOn: "Allow tracking"
+- tapOn: "Continue"
+- extendedWaitUntil: { visible: "consent: granted", timeout: 15000 }

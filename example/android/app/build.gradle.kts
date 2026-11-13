@@ -27,7 +27,7 @@ android {
 
     defaultConfig {
         // Registered in the LinkTrail dashboard — this is what the SDK reports to the backend.
-        applicationId = "io.linktrail.example"
+        applicationId = "io.linktrail.demo.store"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 26

@@ -1,0 +1,10 @@
+# Consent · deny. Needs no secrets and makes no tracking call: deny never sends the install.
+appId: ${APP_ID}
+tags: [smoke, local]
+---
+- launchApp: { clearState: true }
+- extendedWaitUntil: { visible: "Help us attribute your visit", timeout: 60000 }
+- tapOn: "Deny"
+- tapOn: "Continue"
+- extendedWaitUntil: { visible: "consent: denied", timeout: 15000 }
+- assertVisible: "onLink count: 0"

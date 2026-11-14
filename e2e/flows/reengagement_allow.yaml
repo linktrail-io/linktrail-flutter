@@ -1,0 +1,25 @@
+# Re-engagement link · consent allow (REAL): the app is installed and consented, then the link arrives.
+#   Android: a real https App Link (run.sh approves the link hosts for the app first).
+#   iOS:     the link goes through LinkTrail.handleDeepLink from the E2E panel. An unsigned simulator
+#            build drops the associated-domains entitlement, so iOS would open the https link in Safari.
+# Either way the SDK resolves it (and records the open) and onLink must fire once with source
+# reengagement, the link's path and voucher.
+# The allow sends a token-less install first. CI runners share a public IP with earlier rows' clicks,
+# so the backend may attribute it probabilistically and deliver a deferred link too: the flow waits for
+# the install's answer before opening the link and counts re-engagement deliveries only.
+appId: ${APP_ID}
+tags: [real]
+---
+- launchApp: { clearState: true }
+- extendedWaitUntil: { visible: "Help us attribute your visit", timeout: 60000 }
+- tapOn: "Allow tracking"
+- tapOn: "Continue"
+- extendedWaitUntil: { visible: "consent: granted", timeout: 15000 }
+- extendedWaitUntil: { visible: { text: "attribution: attributed=(true|false)" }, timeout: 30000 }
+- waitForAnimationToEnd: { timeout: 5000 }
+- assertVisible: "onLink reengagement: 0"
+- runFlow: open_link.yaml
+- extendedWaitUntil: { visible: "onLink reengagement: 1", timeout: 30000 }
+- assertVisible: "source: reengagement"
+- assertVisible: "path: ${PATH_RE}"
+- assertVisible: { text: "${CUSTOM_DATA_RE}" }

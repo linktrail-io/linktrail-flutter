@@ -1,0 +1,14 @@
+# Probabilistic deferred · consent deny (REAL). Same staging as problistic_allow.yaml (a real click,
+# no token). Deny only records the choice: nothing is sent, so no attribution answer and no link.
+# run.sh then asks the backend: the click has 0 installs.
+appId: ${APP_ID}
+tags: [real]
+---
+- launchApp: { clearState: true }
+- extendedWaitUntil: { visible: "Help us attribute your visit", timeout: 60000 }
+- tapOn: "Deny"
+- tapOn: "Continue"
+- extendedWaitUntil: { visible: "consent: denied", timeout: 15000 }
+- waitForAnimationToEnd: { timeout: 5000 }
+- assertVisible: "attribution: none"
+- assertVisible: "onLink count: 0"

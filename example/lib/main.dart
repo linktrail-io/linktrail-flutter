@@ -20,6 +20,16 @@ import 'widgets/simulator_sheet.dart';
 /// as `LinkTrailInvalidApiKeyException`.
 const _apiKey = String.fromEnvironment('LINKTRAIL_API_KEY', defaultValue: 'lt_live_REPLACE_WITH_YOUR_KEY');
 
+/// Extra custom link domains for the e2e build (comma-separated, e.g. the e2e workspace's custom
+/// domain). Empty by default: the demo claims only kick.linktrail.io.
+const _e2eLinkDomains = String.fromEnvironment('E2E_LINK_DOMAINS');
+
+/// The link domains the demo hands to the SDK: kick.linktrail.io plus any [_e2eLinkDomains].
+List<String> linkDomains() => [
+  'kick.linktrail.io',
+  for (final d in _e2eLinkDomains.split(',')) if (d.trim().isNotEmpty) d.trim(),
+];
+
 void main() {
   runApp(const KickFlipDemoApp());
 }
@@ -59,6 +69,7 @@ class _KickFlipDemoAppState extends State<KickFlipDemoApp> {
       _store.route(event.link, event.source);
     });
     _onAttributionSub = LinkTrail.onAttribution.listen((attribution) {
+      _e2e.recordAttribution(attribution);
       setState(() => _status = 'Attribution · attributed=${attribution.attributed}');
     });
     _onErrorSub = LinkTrail.onError.listen((error) {
@@ -70,9 +81,9 @@ class _KickFlipDemoAppState extends State<KickFlipDemoApp> {
         apiKey: _apiKey,
         // Deny-by-default consent gating (requireConsent), plus the iOS paste-button deferred-token
         // flow (clickTokenSource + autoTrackInstall:false so the install waits for the tap).
-        options: const LinkTrailOptions(
+        options: LinkTrailOptions(
           logEnabled: true,
-          linkDomains: ['kick.linktrail.io'],
+          linkDomains: linkDomains(),
           requireConsent: true,
           autoTrackInstall: false,
           clickTokenSource: LinkTrailClickTokenSource.pasteButton,

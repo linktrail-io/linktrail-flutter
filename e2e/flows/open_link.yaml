@@ -1,0 +1,16 @@
+# Sub-flow: open LINK_URL on the running app.
+#   Android: a real https App Link (run.sh approves the link hosts for the app first).
+#   iOS:     LinkTrail.handleDeepLink from the E2E panel (an unsigned simulator build has no
+#            associated domains, so the https link would open Safari).
+appId: ${APP_ID}
+---
+- runFlow:
+    when: { platform: Android }
+    commands:
+      - openLink: ${LINK_URL}
+- runFlow:
+    when: { platform: iOS }
+    commands:
+      - tapOn: { id: "e2e-link-input" }
+      - inputText: ${LINK_URL}
+      - tapOn: { id: "e2e-handle-link" }

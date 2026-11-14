@@ -9,8 +9,11 @@ tags: [real]
 - tapOn: "Deny"
 - tapOn: "Continue"
 - extendedWaitUntil: { visible: "consent: denied", timeout: 15000 }
+- assertVisible: "onLink reengagement: 0"
 - runFlow: open_link.yaml
-- extendedWaitUntil: { visible: "onLink count: 1", timeout: 30000 }
+- extendedWaitUntil: { visible: "onLink reengagement: 1", timeout: 30000 }
+# Deny sends no install, so nothing else can deliver a link.
+- assertVisible: "onLink count: 1"
 - assertVisible: "source: reengagement"
 - assertVisible: "path: ${PATH_RE}"
 - assertVisible: { text: "${CUSTOM_DATA_RE}" }

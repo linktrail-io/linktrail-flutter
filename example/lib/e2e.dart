@@ -19,6 +19,11 @@ class E2EEvent {
 /// the tally of an events batch (the reward rows).
 class E2EState extends ChangeNotifier {
   int linkCount = 0;
+
+  /// `onLink` deliveries with source reengagement only. A token-less install can be attributed
+  /// probabilistically (CI runners share an IP with earlier clicks) and deliver a deferred link too,
+  /// so the re-engagement rows count their own source.
+  int reengagementCount = 0;
   LinkTrailLinkEvent? lastLink;
   String consent = 'undecided';
   String trackEventResult = 'none';
@@ -27,6 +32,7 @@ class E2EState extends ChangeNotifier {
 
   void recordLink(LinkTrailLinkEvent event) {
     linkCount++;
+    if (event.source == LinkTrailLinkSource.reengagement) reengagementCount++;
     lastLink = event;
     notifyListeners();
   }
@@ -173,6 +179,7 @@ class _E2EPanelState extends State<E2EPanel> {
             children: [
               _line('e2e-consent', 'consent: ${s.consent}'),
               _line('e2e-link-count', 'onLink count: ${s.linkCount}'),
+              _line('e2e-reengagement-count', 'onLink reengagement: ${s.reengagementCount}'),
               _line('e2e-link-source', 'source: ${link?.source.name ?? 'none'}'),
               _line('e2e-link-path', 'path: ${link?.link.path ?? 'none'}'),
               _line('e2e-link-custom-data', 'customData: ${E2EState.formatCustomData(link?.link.customData)}'),

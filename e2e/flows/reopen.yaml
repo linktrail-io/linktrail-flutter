@@ -16,7 +16,8 @@ tags: [real]
 - waitForAnimationToEnd: { timeout: 5000 }
 - assertVisible: "onLink count: 0"
 - runFlow: open_link.yaml
-- extendedWaitUntil: { visible: "onLink count: 1", timeout: 30000 }
+- extendedWaitUntil: { visible: "onLink reengagement: 1", timeout: 30000 }
+- assertVisible: "onLink count: 1"
 - assertVisible: "source: reengagement"
 - assertVisible: "path: ${PATH_RE}"
 - assertVisible: { text: "${CUSTOM_DATA_RE}" }

@@ -48,4 +48,13 @@ void main() {
     state.recordEvents('requested 1 sent 1 attributed 1 failed 0');
     expect(state.events, 'requested 1 sent 1 attributed 1 failed 0');
   });
+
+  test('reengagementCount counts only re-engagement deliveries', () {
+    final state = E2EState();
+    const link = LinkTrailDeepLink(deepLinkPath: '/products/aj1');
+    state.recordLink(const LinkTrailLinkEvent(link, LinkTrailLinkSource.deferred));
+    state.recordLink(const LinkTrailLinkEvent(link, LinkTrailLinkSource.reengagement));
+    expect(state.linkCount, 2);
+    expect(state.reengagementCount, 1);
+  });
 }

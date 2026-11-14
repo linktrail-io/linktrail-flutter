@@ -38,8 +38,8 @@ never as a pass.
 | `deferred_custom_allow__<type>` | link type's link | as `deferred_custom_allow`, plus `customData` `linkType=<type>` and `source=e2e`; backend `linkType`, and the reward: influencer / partner earn `reward.amountMinor` (per_install), general / campaign have `reward: null` and earn 0 |
 | `deferred_custom_deny__<type>` | link type's link | as `deferred_custom_deny`, plus backend `linkType` and nothing earned |
 | `deferred_custom_allow_problistic` / `deferred_subdomain_allow_problistic` | `*_problistic_link` | real click, NO token staged, allow: the install goes out and the app gets its attribution answer. The backend device lookup is not checkable: the plugin exposes no SDK device id |
-| `deferred_custom_deny_problistic` / `deferred_subdomain_deny_problistic` | `*_problistic_link` | real click, no token, deny: nothing sent. Backend: the click has 0 installs |
-| `reengagement_subdomain_allow` | `subdomain_link` | allow, then the link opens the app: `onLink` once, `source: reengagement`, path + voucher |
+| `deferred_custom_deny_problistic` / `deferred_subdomain_deny_problistic` | `*_problistic_link` | real click, no token, deny: nothing sent. Backend (Android): the click has 0 installs. On iOS these links redirect straight to the App Store with no interstitial, so no token exists and there is no click to look up |
+| `reengagement_subdomain_allow` | `subdomain_link` | allow, wait for the install's answer, then the link opens the app: one `reengagement` delivery, path + voucher. The token-less install may be attributed probabilistically to an earlier click from the runner's IP and deliver a deferred link first, so the row counts re-engagement deliveries (`onLink reengagement: N`) |
 | `reengagement_subdomain_deny` | `subdomain_link` | deny, then the link still routes (route-only) |
 | `reengagement_type_allow__<type>` | link type's link | installed through the link (as `deferred_custom_allow__<type>`), restarted, the link opens the app: `source: reengagement`. Backend against the install: `openCount` +1, `installCount` and earning unchanged (no second reward) |
 | `reengagement_type_deny__<type>` | link type's link | the same with deny: `openCount`, `installCount` and earning unchanged |
@@ -58,7 +58,8 @@ How the click is staged:
   Play install and stays in the private Android SDK repo).
 - **iOS:** `e2e/flows/ios/safari_click.yaml` opens the link in Safari, the interstitial puts the
   token on the clipboard, and the deferred flow taps the native Paste button. Probabilistic rows clear
-  the clipboard and answer with Continue, so no token is read.
+  the clipboard and answer with Continue, so no token is read. The probabilistic links redirect
+  straight to the App Store (no interstitial), so Safari makes the click but stages no token.
 
 The app is launched at least `MIN_CTIT_WAIT` (15 s) after its click: the backend flags a faster
 install as click injection. On iOS a link opens the installed app through `LinkTrail.handleDeepLink`

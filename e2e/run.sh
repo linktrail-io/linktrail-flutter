@@ -226,12 +226,13 @@ android_click() {
 }
 
 # ios_click: Safari opens ROW_URL; the interstitial puts lt_click=<token> on the clipboard. Prints it.
+# Returns 2 when Safari ran but no token was staged, 1 when Safari itself failed.
 ios_click() {
   local token
   printf '' | xcrun simctl pbcopy "$DEVICE"
-  mae ios/safari_click.yaml >&2 || return 1
+  mae ios/safari_click.yaml >&2 || { echo "   Safari click flow failed" >&2; return 1; }
   token="$({ xcrun simctl pbpaste "$DEVICE" 2>/dev/null || true; } | grep -oE 'lt_click=[0-9a-fA-F]{32}' | head -1 | cut -d= -f2 || true)"
-  [ -n "$token" ] || { echo "   no lt_click token on the clipboard after Safari" >&2; return 1; }
+  [ -n "$token" ] || { echo "   no lt_click token on the clipboard after Safari" >&2; return 2; }
   printf '%s' "$token"
 }
 
@@ -243,12 +244,20 @@ stage_click() {
   if [ "$PLATFORM" = android ]; then
     TOKEN="$(android_click "$ROW_URL")" || return 1
     [ "$1" = staged ] && adb shell setprop debug.linktrail.referrer "lt_click=$TOKEN"
-  else
+  elif [ "$1" = staged ]; then
     TOKEN="$(ios_click)" || return 1
-    [ "$1" = staged ] || printf '' | xcrun simctl pbcopy "$DEVICE"
+  else
+    # iOS probabilistic links (ios-problistic, custom-problistic) 302 straight to the App Store: no
+    # interstitial, so no token ever reaches the clipboard. Safari still makes the click (from the
+    # simulator, i.e. the runner's public IP, as the install will be); the clipboard is cleared so
+    # nothing could be pasted. The row has no token for a backend check.
+    local rc=0
+    TOKEN="$(ios_click)" || rc=$?
+    [ "$rc" = 1 ] && return 1
+    printf '' | xcrun simctl pbcopy "$DEVICE"
   fi
   CLICK_AT=$SECONDS
-  echo "   click staged=$1 (${TOKEN:0:8}…)"
+  echo "   click staged=$1 (${TOKEN:+${TOKEN:0:8}…}${TOKEN:-no token})"
 }
 
 # wait_ctit: returns once MIN_CTIT_WAIT has passed since the click.
@@ -304,7 +313,10 @@ run_row() {
       backend "$ROW_CONSENT" ${lt[@]+"${lt[@]}"} ;;
     problistic)
       mae "$ROW_YAML" || return 1
-      if [ "$ROW_CONSENT" = deny ]; then backend deny
+      if [ "$ROW_CONSENT" = deny ] && [ -n "$TOKEN" ]; then backend deny
+      elif [ "$ROW_CONSENT" = deny ]; then
+        # iOS probabilistic links stage no token, so there is no click to look up.
+        ROW_BACKEND="n/a"; ROW_DETAIL="click has no token (the link redirects straight to the App Store); device lookup not checkable: the plugin exposes no SDK device id"
       else ROW_BACKEND="n/a"; ROW_DETAIL="device lookup not checkable: the plugin exposes no SDK device id"; fi ;;
     reopen)
       # Step 1: install through the type's link (counted on allow, nothing on deny), backend baseline.

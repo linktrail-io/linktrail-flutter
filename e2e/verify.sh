@@ -1,63 +1,64 @@
 # shellcheck shell=bash
 #
-# Backend check for the deferred flows, sourced by e2e/run.sh. Spec: the private endpoint
-# GET /v1/e2e/clicks/<lt_click token> with header X-E2E-Token (LinkTrail contracts,
-# e2e-verify-endpoint). It checks the flow's own click only, never a global count.
-#   allow: installRecorded=true, attributed=true, matchType=click_token, installCount=1
-#   deny:  installRecorded=false, installCount=0
-# Without E2E_TOKEN the check is skipped with a note (E2E_VERIFY_REQUIRED=1 makes that a failure).
-# Neither the secret nor the full click token is ever printed.
+# Backend checks for the real rows, sourced by e2e/run.sh. Polls the private endpoint
+# GET /v1/e2e/clicks/<lt_click token> (header X-E2E-Token; LinkTrail contract e2e-verify-endpoint)
+# for the row's own click only, never a global count, and judges each response with
+# e2e/e2e-verify.py (the rules for every mode are there).
+#   allow modes poll until the response matches; deny modes hold the whole window, so a late install
+#   or open still shows. A field the backend lacks, a fraud flag or a wrong link type stops at once.
+# Without E2E_TOKEN the check is skipped (VERIFY_STATUS=skipped); E2E_VERIFY_REQUIRED=1 makes that a
+# failure. Neither the secret nor the full click token is ever printed.
 
 VERIFY_BASE="${VERIFY_BASE:-https://backend.linktrail.io}"
 VERIFY_TIMEOUT="${VERIFY_TIMEOUT:-15}"
+VERIFY_PY="${VERIFY_PY:-$(dirname "${BASH_SOURCE[0]}")/e2e-verify.py}"
 
-# judge <response.json> <allow|deny>: prints "PASS <fields>" or "WAIT <fields>".
-judge() {
-  python3 -I -c '
-import json, sys
-d = json.load(open(sys.argv[1])); mode = sys.argv[2]
-got = "installRecorded=%s attributed=%s matchType=%s installCount=%s" % (
-    d.get("installRecorded"), d.get("attributed"), d.get("matchType"), d.get("installCount"))
-if mode == "deny":
-    ok = d.get("installRecorded") is False and d.get("installCount") == 0
-else:
-    ok = (d.get("installRecorded") is True and d.get("attributed") is True
-          and d.get("matchType") == "click_token" and d.get("installCount") == 1)
-print(("PASS " if ok else "WAIT ") + got)
-' "$1" "$2" 2>/dev/null || echo "WAIT unparseable response"
-}
-
-# verify_click <allow|deny> <token>: polls until the expectation holds (allow) or for the whole
-# window (deny, so a late install still shows up). Prints one VERIFY line; non-zero on failure.
-verify_click() {
-  local mode="$1" token="$2" deadline body code verdict="WAIT no response"
+# shellcheck disable=SC2034 # VERIFY_* are read by the caller (e2e/run.sh)
+# verify_backend <mode> <token> [e2e-verify.py check options…]
+# Sets VERIFY_STATUS (ok | fail | skipped), VERIFY_DETAIL (one line) and VERIFY_CHECKS (CHECK lines);
+# the last 200 body is kept in $VERIFY_LAST (the next step's baseline). Returns non-zero on fail.
+verify_backend() {
+  local mode="$1" token="$2"; shift 2
+  local deadline body code out status="" detail="no response" checks=""
+  VERIFY_STATUS=""; VERIFY_DETAIL=""; VERIFY_CHECKS=""
+  rm -f "${VERIFY_LAST:?}"
   if [ -z "${E2E_TOKEN:-}" ]; then
-    if [ "${E2E_VERIFY_REQUIRED:-0}" = "1" ]; then echo "VERIFY FAIL: E2E_TOKEN is not set"; return 1; fi
-    echo "VERIFY SKIP: E2E_TOKEN not set, backend check skipped"; return 0
+    if [ "${E2E_VERIFY_REQUIRED:-0}" = "1" ]; then
+      VERIFY_STATUS=fail; VERIFY_DETAIL="E2E_TOKEN is not set"; echo "   VERIFY FAIL ($mode): $VERIFY_DETAIL"; return 1
+    fi
+    VERIFY_STATUS=skipped; VERIFY_DETAIL="not checked: E2E_TOKEN not set"; echo "   VERIFY SKIP ($mode): $VERIFY_DETAIL"; return 0
   fi
-  [ -n "$token" ] || { echo "VERIFY FAIL: no lt_click token was captured for this flow"; return 1; }
+  [ -n "$token" ] || { VERIFY_STATUS=fail; VERIFY_DETAIL="no lt_click token was captured for this row"; echo "   VERIFY FAIL ($mode): $VERIFY_DETAIL"; return 1; }
   deadline=$(( $(date +%s) + VERIFY_TIMEOUT ))
   body="$(mktemp)"
   while :; do
     # The secret reaches curl through a stdin config, so it never appears in argv, `ps` or the log.
     code="$(printf 'header = "X-E2E-Token: %s"\n' "$E2E_TOKEN" \
       | curl -sS -o "$body" -w '%{http_code}' --max-time 10 --config - "$VERIFY_BASE/v1/e2e/clicks/$token" 2>/dev/null || true)"
-    case "$code" in
-      404)
-        rm -f "$body"
-        echo "VERIFY FAIL: 404 for click ${token:0:8}… — the endpoint is off, the X-E2E-Token is wrong, or this app id is not in the backend's E2E_APP_IDENTIFIERS"
-        return 1 ;;
-      200)
-        verdict="$(judge "$body" "$mode")"
-        if [ "$mode" = allow ] && [[ "$verdict" == PASS* ]]; then break; fi
-        if [ "$mode" = deny ] && [[ "$verdict" == WAIT* ]]; then break; fi ;;
-      *) verdict="WAIT HTTP ${code:-000}" ;;
-    esac
+    if [ "$code" = 404 ]; then
+      rm -f "$body"
+      VERIFY_STATUS=fail
+      VERIFY_DETAIL="404 for click ${token:0:8}…: the endpoint is off, X-E2E-Token is wrong, or the app id is not in the backend's E2E_APP_IDENTIFIERS"
+      echo "   VERIFY FAIL ($mode): $VERIFY_DETAIL"; return 1
+    fi
+    if [ "$code" = 200 ]; then
+      out="$(python3 -I "$VERIFY_PY" check --mode "$mode" --body "$body" "$@" 2>/dev/null)" || out=$'bad\ne2e-verify.py failed'
+      status="$(sed -n 1p <<< "$out")"; detail="$(sed -n 2p <<< "$out")"; checks="$(grep '^CHECK' <<< "$out" || true)"
+      cp "$body" "$VERIFY_LAST"
+      case "$status" in missing|fail) break ;; esac
+      if [[ "$mode" == *allow && "$status" == ok ]]; then break; fi
+      if [[ "$mode" == *deny && "$status" != ok ]]; then break; fi
+    else
+      detail="HTTP ${code:-000}"
+    fi
     [ "$(date +%s)" -ge "$deadline" ] && break
     sleep 2
   done
   rm -f "$body"
-  if [[ "$verdict" == PASS* ]]; then echo "VERIFY OK ($mode): click ${token:0:8}… ${verdict#PASS }"; return 0; fi
-  echo "VERIFY FAIL ($mode): click ${token:0:8}… after ${VERIFY_TIMEOUT}s — ${verdict#WAIT }"
+  VERIFY_CHECKS="$checks"
+  VERIFY_DETAIL="click ${token:0:8}… $detail"
+  if [ "$status" = ok ]; then VERIFY_STATUS=ok; echo "   VERIFY OK ($mode): $VERIFY_DETAIL"; return 0; fi
+  VERIFY_STATUS=fail
+  echo "   VERIFY FAIL ($mode) after ${VERIFY_TIMEOUT}s: $VERIFY_DETAIL"
   return 1
 }

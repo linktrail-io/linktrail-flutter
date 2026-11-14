@@ -1,20 +1,47 @@
 name: E2E
 
-# Maestro smoke e2e for the plugin, against the example app built from this checkout. See TESTING.md.
-#   - native-versions: the plugin's pinned native SDKs vs the latest published (warn-only for now).
-#   - android: API 35 emulator on a hosted runner (KVM).
-#   - ios: simulator on the self-hosted Mac, serialised by the machine-wide lock (e2e/sim-lock.sh).
+# Maestro e2e for the plugin, against the example app built from this checkout: the native SDKs'
+# e2e rows, run through the plugin. See TESTING.md.
+#   - native-versions: the plugin's pinned native SDKs vs the latest published.
+#   - android: API 35 emulator on a GitHub-hosted runner (KVM).
+#   - ios: simulator on a GitHub-hosted macOS runner (same-repo PRs and manual runs only).
+# Hosts, slugs and backends come from e2e/e2e-env.json; the rows from e2e/e2e-flows.json.
+#
+# Choices (manual run inputs, else repository variables, else the defaults):
+#   environment / E2E_ENV         prod (default) or dev (test = dev)
+#   link_types / E2E_LINK_TYPES   link-type matrix: all (default), none, or a comma list
+#   E2E_CUSTOM_LINK, E2E_SUBDOMAIN_LINK, E2E_CUSTOM_PROBLISTIC_LINK, E2E_SUBDOMAIN_PROBLISTIC_LINK
+#                                 override a link slot (full URL on the environment's host, or a slug)
 #
 # Secrets (repository secrets, never printed):
-#   LINKTRAIL_KEY  SDK key for the workspace that owns the test link (kick.linktrail.io).
-#   E2E_TOKEN      X-E2E-Token for the private backend check GET /v1/e2e/clicks/<token>.
-# Without LINKTRAIL_KEY the real flows are skipped with a notice and only the consent flows run.
-# Fork pull requests get no secrets (this is `pull_request`, never `pull_request_target`) and never
-# reach the self-hosted Mac.
+#   LINKTRAIL_KEY       SDK key for the prod e2e workspace (the environment's key_secret).
+#   LINKTRAIL_TEST_KEY  SDK key for the dev e2e workspace (dev runs only).
+#   E2E_TOKEN           X-E2E-Token for the private backend check GET /v1/e2e/clicks/<token>.
+# Without the key the real rows are skipped with a notice and only the consent rows run; without
+# E2E_TOKEN the rows whose point is the backend check are reported as skipped. Fork pull requests get
+# no secrets (this is `pull_request`, never `pull_request_target`).
 
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Backend + link hosts (e2e/e2e-env.json)"
+        type: choice
+        options: [prod, dev]
+        default: prod
+      link_types:
+        description: "Link-type matrix: all, none, or a comma list (general,partner)"
+        type: string
+        default: all
+      custom_link:
+        description: "custom_link override: full URL or slug (empty = default)"
+        type: string
+        default: ""
+      subdomain_link:
+        description: "subdomain_link override: full URL or slug (empty = default)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -25,6 +52,12 @@ concurrency:
 
 env:
   FLUTTER_VERSION: "3.44.5"
+  LINKTRAIL_ENV: ${{ inputs.environment || vars.E2E_ENV || 'prod' }}
+  E2E_LINK_TYPES: ${{ inputs.link_types || vars.E2E_LINK_TYPES || 'all' }}
+  E2E_CUSTOM_LINK: ${{ inputs.custom_link || vars.E2E_CUSTOM_LINK || '' }}
+  E2E_SUBDOMAIN_LINK: ${{ inputs.subdomain_link || vars.E2E_SUBDOMAIN_LINK || '' }}
+  E2E_CUSTOM_PROBLISTIC_LINK: ${{ vars.E2E_CUSTOM_PROBLISTIC_LINK || '' }}
+  E2E_SUBDOMAIN_PROBLISTIC_LINK: ${{ vars.E2E_SUBDOMAIN_PROBLISTIC_LINK || '' }}
 
 jobs:
   native-versions:
@@ -44,14 +77,45 @@ jobs:
             python3 -I scripts/check-native-versions.py --warn-only
           fi
 
+  # The e2e tables and rules on their own: the env table, the row plan and the backend rules
+  # (e2e/tests), plus the runner scripts' and the Maestro flows' syntax. Needs no secrets, so it
+  # runs on fork PRs too.
+  e2e-config:
+    name: E2E config
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests for e2e/e2e-env.py and e2e/e2e-verify.py
+        run: python3 -I -m unittest discover -s e2e/tests -v
+      - name: Plan every environment
+        run: |
+          for env in prod dev; do LINKTRAIL_ENV=$env python3 -I e2e/e2e-env.py plan >/dev/null; done
+      - name: Shell syntax
+        run: bash -n e2e/run.sh && bash -n e2e/verify.sh
+      - name: Install Maestro
+        run: |
+          curl -Ls https://get.maestro.mobile.dev | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+      - name: Maestro flow syntax
+        run: |
+          for f in e2e/flows/*.yaml e2e/flows/ios/*.yaml; do echo "$f"; maestro check-syntax "$f"; done
+
   android:
     name: E2E · Android
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 150
     env:
       API_LEVEL: 35
     steps:
       - uses: actions/checkout@v4
+
+      # Environment, links and rows (e2e/e2e-env.json); a bad choice fails here, before any build.
+      - name: Resolve e2e targets
+        id: targets
+        run: |
+          python3 -I e2e/e2e-env.py resolve --format env | grep '^KEY_SECRET=' | sed 's/^KEY_SECRET=/key_secret=/' >> "$GITHUB_OUTPUT"
+          python3 -I e2e/e2e-env.py plan >/dev/null
 
       - uses: actions/setup-java@v4
         with:
@@ -85,11 +149,12 @@ jobs:
 
       - name: Secrets check
         env:
-          HAS_KEY: ${{ secrets.LINKTRAIL_KEY != '' }}
+          KEY_SECRET: ${{ steps.targets.outputs.key_secret }}
+          HAS_KEY: ${{ secrets[steps.targets.outputs.key_secret] != '' }}
           HAS_E2E_TOKEN: ${{ secrets.E2E_TOKEN != '' }}
         run: |
-          [ "$HAS_KEY" = true ] || echo "::notice title=e2e::LINKTRAIL_KEY not available (fork PR or not configured): real flows will be skipped"
-          [ "$HAS_E2E_TOKEN" = true ] || echo "::notice title=e2e::E2E_TOKEN not available: the backend install check will be skipped"
+          [ "$HAS_KEY" = true ] || echo "::notice title=e2e::$KEY_SECRET not available (fork PR or not configured): real rows will be skipped"
+          [ "$HAS_E2E_TOKEN" = true ] || echo "::notice title=e2e::E2E_TOKEN not available: rows whose point is the backend check will be reported as skipped"
 
       - name: AVD cache
         uses: actions/cache@v4
@@ -115,10 +180,10 @@ jobs:
           emulator-boot-timeout: 900
           script: echo "AVD snapshot generated."
 
-      - name: Maestro smoke flows
-        timeout-minutes: 40
+      - name: Maestro e2e rows
+        timeout-minutes: 130
         env:
-          LINKTRAIL_KEY: ${{ secrets.LINKTRAIL_KEY }}
+          LINKTRAIL_KEY: ${{ secrets[steps.targets.outputs.key_secret] }}
           E2E_TOKEN: ${{ secrets.E2E_TOKEN }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -136,6 +201,15 @@ jobs:
             sleep 30
             bash e2e/run.sh android
 
+      - name: Upload e2e results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results-android
+          path: build/e2e/
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Upload Maestro debug output
         if: failure()
         uses: actions/upload-artifact@v4
@@ -151,9 +225,15 @@ jobs:
     # manual runs only, because the job uses the repo's e2e secrets.
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: macos-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve e2e targets
+        id: targets
+        run: |
+          python3 -I e2e/e2e-env.py resolve --format env | grep '^KEY_SECRET=' | sed 's/^KEY_SECRET=/key_secret=/' >> "$GITHUB_OUTPUT"
+          python3 -I e2e/e2e-env.py plan >/dev/null
 
       - name: Install Maestro
         run: |
@@ -168,14 +248,15 @@ jobs:
 
       - name: Secrets check
         env:
-          HAS_KEY: ${{ secrets.LINKTRAIL_KEY != '' }}
+          KEY_SECRET: ${{ steps.targets.outputs.key_secret }}
+          HAS_KEY: ${{ secrets[steps.targets.outputs.key_secret] != '' }}
           HAS_E2E_TOKEN: ${{ secrets.E2E_TOKEN != '' }}
         run: |
-          [ "$HAS_KEY" = true ] || echo "::notice title=e2e::LINKTRAIL_KEY not configured: real flows will be skipped"
-          [ "$HAS_E2E_TOKEN" = true ] || echo "::notice title=e2e::E2E_TOKEN not configured: the backend install check will be skipped"
+          [ "$HAS_KEY" = true ] || echo "::notice title=e2e::$KEY_SECRET not available (fork PR or not configured): real rows will be skipped"
+          [ "$HAS_E2E_TOKEN" = true ] || echo "::notice title=e2e::E2E_TOKEN not available: rows whose point is the backend check will be reported as skipped"
 
-      # The Mac's runners share one simulator set; the lock (shared with the iOS SDK's e2e) lets only
-      # one e2e job touch simulators at a time, and waiting jobs queue instead of being cancelled.
+      # The lock (shared with the iOS SDK's e2e) serialises e2e jobs that share one machine's
+      # simulators; on a fresh GitHub-hosted runner it is taken at once.
       - name: Acquire the simulator lock
         run: |
           set -euo pipefail
@@ -192,10 +273,10 @@ jobs:
           xcrun simctl bootstatus "$udid" -b
           echo "DEVICE=$udid" >> "$GITHUB_ENV"
 
-      - name: Maestro smoke flows
-        timeout-minutes: 60
+      - name: Maestro e2e rows
+        timeout-minutes: 160
         env:
-          LINKTRAIL_KEY: ${{ secrets.LINKTRAIL_KEY }}
+          LINKTRAIL_KEY: ${{ secrets[steps.targets.outputs.key_secret] }}
           E2E_TOKEN: ${{ secrets.E2E_TOKEN }}
         run: bash e2e/run.sh ios
 
@@ -207,6 +288,15 @@ jobs:
       - name: Release the simulator lock
         if: always()
         run: bash e2e/sim-lock.sh release "${E2E_LOCK_PID:-}"
+
+      - name: Upload e2e results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results-ios
+          path: build/e2e/
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload Maestro debug output
         if: failure()

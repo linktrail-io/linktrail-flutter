@@ -1,0 +1,22 @@
+# Re-engagement on an installed app (REAL), the second step of the reengagement_type_* rows. Before
+# it, e2e/run.sh installs the app through the type's link (a real click, its token staged, then
+# deferred_allow.yaml or deferred_deny.yaml) and reads the backend's baseline for that click. This flow
+# restarts the app (state kept: the install and the consent answer stay), then opens the same link:
+# onLink fires once with source reengagement. run.sh then checks the backend against the baseline:
+# allow openCount +1, deny unchanged; installCount and earning never change (no second reward).
+appId: ${APP_ID}
+tags: [real]
+---
+- stopApp
+- launchApp
+# The consent answer is replayed from storage: the sheet is not asked again.
+- extendedWaitUntil: { visible: "consent: ${CONSENT_TEXT}", timeout: 30000 }
+- assertNotVisible: "Help us attribute your visit"
+# A new process: the deferred delivery of the install step is not repeated.
+- waitForAnimationToEnd: { timeout: 5000 }
+- assertVisible: "onLink count: 0"
+- runFlow: open_link.yaml
+- extendedWaitUntil: { visible: "onLink count: 1", timeout: 30000 }
+- assertVisible: "source: reengagement"
+- assertVisible: "path: ${PATH_RE}"
+- assertVisible: { text: "${CUSTOM_DATA_RE}" }

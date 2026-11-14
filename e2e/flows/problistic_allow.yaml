@@ -1,0 +1,15 @@
+# Probabilistic deferred · consent allow (REAL). e2e/run.sh makes the row's real click (Android: curl
+# from the runner, which shares the emulator's public IP; iOS: ios/safari_click.yaml) and stages NO
+# token: the install carries no click id, so only the backend's IP + platform match can attribute it.
+# On iOS the flow answers with Continue, never the Paste control, so the clipboard is not read.
+# Not asserting the product page: the backend's match may or may not attribute the install. What must
+# happen: allow sends the install and the app receives its attribution answer.
+appId: ${APP_ID}
+tags: [real]
+---
+- launchApp: { clearState: true }
+- extendedWaitUntil: { visible: "Help us attribute your visit", timeout: 60000 }
+- tapOn: "Allow tracking"
+- tapOn: "Continue"
+- extendedWaitUntil: { visible: "consent: granted", timeout: 15000 }
+- extendedWaitUntil: { visible: { text: "attribution: attributed=(true|false)" }, timeout: 30000 }

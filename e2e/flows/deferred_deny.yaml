@@ -1,5 +1,8 @@
-# Deferred link · consent deny (REAL). Same staging as deferred_allow.yaml. Deny never sends the
-# install, so no deferred link is delivered; run.sh then asks the backend: not recorded, 0 installs.
+# Deferred link · consent deny (REAL). Shared by every click-token deny row (deferred_subdomain_deny,
+# deferred_custom_deny and its link-type rows, the reward rows, the re-engagement rows' install step).
+# Same staging as deferred_allow.yaml. The example defers the install until the user answers
+# (autoTrackInstall: false) and Deny only records the choice, so nothing is sent and no deferred link is
+# delivered. run.sh then asks the backend: not recorded, 0 installs, nothing earned.
 appId: ${APP_ID}
 tags: [real]
 ---
@@ -10,3 +13,4 @@ tags: [real]
 - extendedWaitUntil: { visible: "consent: denied", timeout: 15000 }
 - waitForAnimationToEnd: { timeout: 5000 }
 - assertVisible: "onLink count: 0"
+- assertVisible: "attribution: none"

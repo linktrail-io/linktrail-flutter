@@ -1,0 +1,13 @@
+# Reward events (REAL), the second step of the reward_* rows, on the running app right after
+# deferred_allow.yaml / deferred_deny.yaml. e2e/run.sh builds EVENTS_SPEC from the install's backend
+# response (e2e/e2e-verify.py plan-events): per_event sends reward.eventName twice + one other event,
+# rev_share one revenue event in the reward currency + one in another currency. The E2E panel sends
+# each through LinkTrail.trackEvent and shows the tally; EXPECT_EVENTS is what it must read:
+#   allow: every event sent and attributed;  deny: the SDK drops them all (sent 0).
+appId: ${APP_ID}
+tags: [real]
+---
+- tapOn: { id: "e2e-events-input" }
+- inputText: ${EVENTS_SPEC}
+- tapOn: { id: "e2e-send-events" }
+- extendedWaitUntil: { visible: "events: ${EXPECT_EVENTS}", timeout: 60000 }

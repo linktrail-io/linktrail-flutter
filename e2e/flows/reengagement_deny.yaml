@@ -1,0 +1,16 @@
+# Re-engagement link · consent deny (REAL): consent denied, then the link arrives (as in
+# reengagement_allow.yaml). Routing is not tracking: the SDK resolves the link route-only (records no
+# open) and onLink still fires once with source reengagement, the link's path and voucher.
+appId: ${APP_ID}
+tags: [real]
+---
+- launchApp: { clearState: true }
+- extendedWaitUntil: { visible: "Help us attribute your visit", timeout: 60000 }
+- tapOn: "Deny"
+- tapOn: "Continue"
+- extendedWaitUntil: { visible: "consent: denied", timeout: 15000 }
+- runFlow: open_link.yaml
+- extendedWaitUntil: { visible: "onLink count: 1", timeout: 30000 }
+- assertVisible: "source: reengagement"
+- assertVisible: "path: ${PATH_RE}"
+- assertVisible: { text: "${CUSTOM_DATA_RE}" }

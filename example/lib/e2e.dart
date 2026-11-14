@@ -5,13 +5,25 @@ import 'package:linktrail_flutter/linktrail_flutter.dart';
 /// `--dart-define=E2E=true`.
 const bool kE2EPanel = bool.fromEnvironment('E2E');
 
-/// What the Maestro smoke flows assert on: every `onLink` delivery (so "fired exactly once" is
-/// checkable), the consent decision and the last `trackEvent` result.
+/// One event of an events spec (see [E2EState.parseEvents]).
+class E2EEvent {
+  const E2EEvent(this.name, {this.value, this.currency});
+
+  final String name;
+  final double? value;
+  final String? currency;
+}
+
+/// What the Maestro flows assert on: every `onLink` delivery (so "fired exactly once" is
+/// checkable), the consent decision, the last attribution answer, the last `trackEvent` result and
+/// the tally of an events batch (the reward rows).
 class E2EState extends ChangeNotifier {
   int linkCount = 0;
   LinkTrailLinkEvent? lastLink;
   String consent = 'undecided';
   String trackEventResult = 'none';
+  String attribution = 'none';
+  String events = 'none';
 
   void recordLink(LinkTrailLinkEvent event) {
     linkCount++;
@@ -28,6 +40,45 @@ class E2EState extends ChangeNotifier {
     trackEventResult = value;
     notifyListeners();
   }
+
+  void recordAttribution(LinkTrailAttribution value) {
+    attribution = 'attributed=${value.attributed}';
+    notifyListeners();
+  }
+
+  void recordEvents(String value) {
+    events = value;
+    notifyListeners();
+  }
+
+  /// An events spec, as the e2e runner types it: events joined by `;`, each `name` or
+  /// `name,value,currency` (e.g. `purchase;purchase;e2e_other` or `e2e_revenue,19.99,GBP`).
+  /// Returns null when any entry is malformed.
+  static List<E2EEvent>? parseEvents(String spec) {
+    final out = <E2EEvent>[];
+    for (final raw in spec.split(';')) {
+      final entry = raw.trim();
+      if (entry.isEmpty) continue;
+      final parts = entry.split(',').map((p) => p.trim()).toList();
+      if (parts.first.isEmpty) return null;
+      if (parts.length == 1) {
+        out.add(E2EEvent(parts.first));
+      } else if (parts.length == 3) {
+        final value = double.tryParse(parts[1]);
+        if (value == null || parts[2].isEmpty) return null;
+        out.add(E2EEvent(parts.first, value: value, currency: parts[2]));
+      } else {
+        return null;
+      }
+    }
+    return out.isEmpty ? null : out;
+  }
+
+  /// The tally line of an events batch: `requested` events asked for, `sent` acknowledged by the
+  /// backend (an id), `attributed` of those attributed, `failed` that threw. Without consent the SDK
+  /// drops every event: sent 0.
+  static String formatEvents({required int requested, required int sent, required int attributed, required int failed}) =>
+      'requested $requested sent $sent attributed $attributed failed $failed';
 
   /// `customData` as sorted `key=value` pairs, so a flow can assert one pair by regex.
   static String formatCustomData(Map<String, String>? data) {
@@ -50,11 +101,36 @@ class E2EPanel extends StatefulWidget {
 
 class _E2EPanelState extends State<E2EPanel> {
   final _url = TextEditingController();
+  final _events = TextEditingController();
 
   @override
   void dispose() {
     _url.dispose();
+    _events.dispose();
     super.dispose();
+  }
+
+  /// Sends the events spec one by one through [LinkTrail.trackEvent], then shows the tally.
+  Future<void> _sendEvents() async {
+    final events = E2EState.parseEvents(_events.text);
+    if (events == null) {
+      widget.state.recordEvents('invalid spec');
+      return;
+    }
+    widget.state.recordEvents('sending ${events.length}');
+    var sent = 0, attributed = 0, failed = 0;
+    for (final e in events) {
+      try {
+        final result = await LinkTrail.trackEvent(name: e.name, value: e.value, currency: e.currency);
+        if (result.id != null) sent++;
+        if (result.attributed) attributed++;
+      } on LinkTrailException {
+        failed++;
+      }
+    }
+    widget.state.recordEvents(
+      E2EState.formatEvents(requested: events.length, sent: sent, attributed: attributed, failed: failed),
+    );
   }
 
   Future<void> _trackEvent() async {
@@ -101,6 +177,8 @@ class _E2EPanelState extends State<E2EPanel> {
               _line('e2e-link-path', 'path: ${link?.link.path ?? 'none'}'),
               _line('e2e-link-custom-data', 'customData: ${E2EState.formatCustomData(link?.link.customData)}'),
               _line('e2e-track-event', 'trackEvent: ${s.trackEventResult}'),
+              _line('e2e-attribution', 'attribution: ${s.attribution}'),
+              _line('e2e-events', 'events: ${s.events}'),
               Row(
                 children: [
                   Expanded(
@@ -121,6 +199,25 @@ class _E2EPanelState extends State<E2EPanel> {
                   Semantics(
                     identifier: 'e2e-track-event-button',
                     child: TextButton(onPressed: _trackEvent, child: const Text('Track event')),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Semantics(
+                      identifier: 'e2e-events-input',
+                      child: TextField(
+                        key: const ValueKey('e2e-events-input'),
+                        controller: _events,
+                        decoration: const InputDecoration(isDense: true, hintText: 'events spec'),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ),
+                  Semantics(
+                    identifier: 'e2e-send-events',
+                    child: TextButton(onPressed: _sendEvents, child: const Text('Send events')),
                   ),
                 ],
               ),

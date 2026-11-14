@@ -31,6 +31,18 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="https" android:host="kick.linktrail.io"/>
             </intent-filter>
+            <!-- The e2e link hosts (e2e/e2e-env.json): the custom domain of each environment and the
+                 dev subdomain. Not auto-verified; e2e/run.sh approves them for the app
+                 (pm set-app-links-user-selection) before the re-engagement rows. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https"/>
+                <data android:host="link.kynxlabs.com"/>
+                <data android:host="dev-test.kynxlabs.com"/>
+                <data android:host="kick.test.linktrail.io"/>
+            </intent-filter>
             <!-- Custom scheme fallback, for local testing without a real domain. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
